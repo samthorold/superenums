@@ -36,6 +36,7 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 ## Tooling
 
 - Use **uv** for everything: environments, dependencies, running tools (`uv run ...`, `uv add --dev ...`). Don't use bare `pip` or globally installed tools.
+- **uv itself is pinned** by `[tool.uv] required-version` in `pyproject.toml`. CI's setup-uv reads it, and uv refuses to run locally at any other version. Without the pin, setup-uv installs the latest uv, so CI and releases drift from local. Upgrade deliberately in one PR: `required-version` and the `uv_build` bound in `[build-system]` together, then `uv lock`. Install uv with the standalone installer, so `uv self update <version>` works.
 - **ruff** for linting and formatting.
 - **pyright, mypy, and ty**, all pinned as dev dependencies. They check the library itself (strict) and run the type-level test suite. ty is pre-1.0: its failures are advisory until it stabilises.
 - **pytest** for runtime behaviour.

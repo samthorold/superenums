@@ -28,5 +28,10 @@ def fields_come_from_dataclasses() -> None:
     )
 
 
+def fields_of_every_variant_of_an_enum() -> None:
+    for cls in variants(Shape):
+        assert_type(dataclasses.fields(cls), tuple[dataclasses.Field[Any], ...])
+
+
 def variants_takes_the_alias_not_a_variant() -> None:
     variants(shapes.Circle)  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]  # ty: ignore[invalid-argument-type]

@@ -259,6 +259,12 @@ A variant with a field of the same name as the tag key is an error when the exte
 
 Rejected: serde's default externally tagged form, `{"Circle": {"radius": 1.0}}`. It cannot collide with a field, but none of the three libraries supports it natively, so every extension would carry its own codec.
 
+### cattrs: hooks over the converter's own
+
+`superenums.cattrs.configure(Shape, converter, key="type")` registers hook factories for the alias, its specialisations (`Tree[int]`) and the union it names. The hooks add or read the tag and delegate the fields to the converter's own hook for each variant (`Leaf[int]`), looked up on first use so a recursive enum's hooks can refer to themselves. cattrs' `configure_tagged_union` was not used: it fails on an alias naming one variant, can't substitute a generic alias's type arguments, and reports an unknown tag as a bare `KeyError`.
+
+Checkers reject the alias as `structure`'s target (typed `type[T]`), and accept the union it names (`Shape.__value__`, typed `Any`), so the hooks match that union too. Otherwise a type-checked caller would silently skip the tag.
+
 ### Packaging: extras, not separate distributions
 
 The extensions ship in the `superenums` distribution as modules (`superenums.cattrs`, `superenums.pydantic`, `superenums.msgspec`), each needing its library through an extra (`superenums[pydantic]`). The core keeps zero dependencies: nothing outside an extension's own module imports its library, and a test checks that `superenums` imports with none of them installed.

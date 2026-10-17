@@ -1,18 +1,18 @@
-"""The enum shared by the case files."""
+"""The enum shared by the case files, which reach it as a module: `shapes.Circle`."""
 
-from superenums import Variant, Variants
-
-
-class Shapes(Variants):
-    class Circle(Variant):
-        radius: float
-
-    class Rect(Variant):
-        w: float
-        h: float
-
-    class Empty(Variant): ...
+from superenums import Variant
 
 
-type Shape = Shapes.Circle | Shapes.Rect | Shapes.Empty
-Shapes.seal(Shape)
+class Circle(Variant):
+    radius: float
+
+
+class Rect(Variant):
+    w: float
+    h: float
+
+
+class Empty(Variant): ...
+
+
+type Shape = Circle | Rect | Empty

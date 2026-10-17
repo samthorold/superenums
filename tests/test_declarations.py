@@ -5,72 +5,57 @@ from collections.abc import Callable
 
 import pytest
 
-from superenums import SuperEnumError, Variant, Variants
+from superenums import SuperEnumError, Variant
 
 
-class Shapes(Variants):
-    class Circle(Variant):
-        radius: float
-
-    class Rect(Variant):
-        width: float
-        height: float
+class Circle(Variant):
+    radius: float
 
 
-type Shape = Shapes.Circle | Shapes.Rect
-Shapes.seal(Shape)
+class Rect(Variant):
+    width: float
+    height: float
+
+
+type Shape = Circle | Rect
 
 
 def test_subclassing_a_variant_raises_when_the_class_is_created() -> None:
     with pytest.raises(SuperEnumError) as excinfo:
 
-        class BigCircle(Shapes.Circle): ...
+        class BigCircle(Circle): ...
 
     message = str(excinfo.value)
     assert "BigCircle" in message
-    assert "Shapes.Circle" in message
+    assert "Circle" in message
     assert "subclass" in message
 
 
 def test_inheriting_from_two_variants_at_once_raises() -> None:
     with pytest.raises(SuperEnumError) as excinfo:
 
-        class Both(Shapes.Circle, Shapes.Rect): ...
+        class Both(Circle, Rect): ...
 
     message = str(excinfo.value)
     assert "Both" in message
-    assert "Shapes.Circle" in message
-    assert "Shapes.Rect" in message
-
-
-def test_subclassing_a_namespace_raises_when_the_class_is_created() -> None:
-    with pytest.raises(SuperEnumError) as excinfo:
-
-        class MoreShapes(Shapes):
-            class Triangle(Variant): ...
-
-    message = str(excinfo.value)
-    assert "MoreShapes" in message
-    assert "Shapes" in message
-    assert "subclass" in message
+    assert "Circle" in message
+    assert "Rect" in message
 
 
 def test_a_generic_variant_subclasses_variant_directly() -> None:
     # PEP 695 adds Generic as a second base; that is still direct subclassing.
-    class Boxes(Variants):
-        class Full[T](Variant):
-            item: T
+    class Full[T](Variant):
+        item: T
 
-    assert issubclass(Boxes.Full, Variant)
-    assert "item" in Boxes.Full.__dataclass_fields__
+    assert issubclass(Full, Variant)
+    assert "item" in Full.__dataclass_fields__
 
 
 def test_a_variant_declaring_its_own_slots_is_rejected() -> None:
     with pytest.raises(SuperEnumError) as excinfo:
 
-        class Pets(Variants):
-            class Cat(Variant):
-                __slots__ = ("name",)
+        class Cat(Variant):
+            __slots__ = ("name",)
 
     message = str(excinfo.value)
     assert "Cat" in message
@@ -80,9 +65,8 @@ def test_a_variant_declaring_its_own_slots_is_rejected() -> None:
 def test_a_variant_passing_class_keywords_is_rejected() -> None:
     with pytest.raises(SuperEnumError) as excinfo:
 
-        class Pets(Variants):
-            class Cat(Variant, frozen=False):
-                name: str
+        class Cat(Variant, frozen=False):
+            name: str
 
     message = str(excinfo.value)
     assert "Cat" in message
@@ -116,32 +100,10 @@ def test_a_variant_applying_dataclass_itself_is_rejected(
 ) -> None:
     with pytest.raises(SuperEnumError) as excinfo:
 
-        class Pets(Variants):
-            @decorator
-            class Cat(Variant):
-                name: str
+        @decorator
+        class Cat(Variant):
+            name: str
 
     message = str(excinfo.value)
     assert "Cat" in message
     assert "@dataclass" in message
-
-
-def test_a_namespace_binding_the_name_seal_is_rejected() -> None:
-    # It would shadow Variants.seal, so the namespace could never be sealed.
-    with pytest.raises(SuperEnumError) as excinfo:
-
-        class Stamps(Variants):
-            class seal(Variant): ...
-
-    message = str(excinfo.value)
-    assert "Stamps" in message
-    assert "'seal'" in message
-
-
-def test_a_variant_named_seal_with_a_capital_is_allowed() -> None:
-    class Stamps(Variants):
-        class Seal(Variant): ...
-
-    type Stamp = Stamps.Seal
-    Stamps.seal(Stamp)
-    assert Stamps.Seal() is Stamps.Seal()

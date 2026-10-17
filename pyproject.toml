@@ -24,8 +24,9 @@ dev = [
 
 [tool.ruff]
 target-version = "py312"
-# The design docs keep their compact one-line examples.
-extend-exclude = ["docs", "CLAUDE.md"]
+# The design docs keep their compact one-line examples. The user guide
+# (docs/guide.md) is formatted like code, since its examples are run as tests.
+extend-exclude = ["docs/system-design", "docs/prior-art.md", "CLAUDE.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]

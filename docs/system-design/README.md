@@ -102,6 +102,8 @@ match s:
 
 Calling a unit variant always returns the same cached instance, so a unit variant has exactly one value, and `x is Shapes.Empty()` holds for every empty shape. Pickling and copying preserve this: unpickling or deep-copying a unit value gives back the cached instance, not a second one.
 
+A unit variant is one with no fields at all. A variant whose fields all have defaults is not one: `Box()` and `Box(side=2.0)` are different values, so it is never cached. `dataclasses.replace` on a unit value also gives back the cached instance. The instance is cached when the namespace is sealed, so an unsealed unit variant refuses construction like any other variant.
+
 Rust writes `Shape::Empty` with no call, and a bare `Shapes.Empty` value would be closer to it. Checkers don't allow it. They narrow a value pattern such as `case Shapes.Empty:` only when the value is a literal or a stdlib enum member that is declared directly. An ordinary singleton object is never narrowed, so a `match` that uses one can never be proven exhaustive. A stdlib enum member does narrow, but only when the union alias names it through `Literal[...]` on the stdlib enum's own declaration, not on a re-export. The user would have to declare a separate stdlib enum to hold each enum's unit variants, re-export each member on the namespace, and spell the alias with `Literal`. The library cannot generate any of that, because checkers recognise only enum members declared in source. The parentheses are the cost of exhaustiveness.
 
 Treating every variant as a class also keeps the model uniform. Every value is made by a call and every pattern is a class pattern, so nothing depends on whether a variant has fields.

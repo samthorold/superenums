@@ -8,7 +8,7 @@ variant the user declares.
 import types
 import typing
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any, NoReturn, TypeAliasType, dataclass_transform
 from weakref import WeakKeyDictionary
 
@@ -222,7 +222,37 @@ class Variants(metaclass=_VariantsMeta):
             )
         for variant in declared:
             type.__setattr__(variant, "__init__", _inits.pop(variant))
+            if _is_unit(variant):
+                _cache_unit(variant)
         _sealed[cls] = alias
+
+
+def _is_unit(variant: type[Any]) -> bool:
+    """Whether a variant has no fields (defaulted fields still count)."""
+    return not fields(variant)
+
+
+def _cache_unit(variant: type[Any]) -> None:
+    """Give a unit variant (one with no fields) exactly one value.
+
+    Its ``__new__`` returns the one cached instance, so calling it and
+    ``dataclasses.replace`` give back that instance. Pickle and copy are told
+    to rebuild a unit value by calling its class (``__reduce__``) rather than
+    through ``object.__new__``, which the older pickle protocols use directly,
+    so they give back the same instance too. Installed by ``seal``, so an
+    unsealed unit variant still refuses construction through the stand-in
+    ``__init__``.
+    """
+    instance: object = object.__new__(variant)
+
+    def __new__(cls: type) -> object:
+        return instance
+
+    def __reduce__(self: object) -> tuple[type, tuple[()]]:
+        return variant, ()
+
+    type.__setattr__(variant, "__new__", staticmethod(__new__))
+    type.__setattr__(variant, "__reduce__", __reduce__)
 
 
 def _alias_variants(alias: TypeAliasType) -> tuple[object, ...]:

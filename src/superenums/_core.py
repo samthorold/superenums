@@ -7,9 +7,33 @@ variant the user declares.
 
 import types
 import typing
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, TypeAliasType, dataclass_transform
+from typing import Any, NoReturn, TypeAliasType, dataclass_transform
 from weakref import WeakKeyDictionary
+
+
+class SuperEnumError(TypeError):
+    """An enum is declared or used in a way superenums does not allow.
+
+    A ``TypeError``, like Python's own errors for a misdeclared class or a
+    write to an immutable type.
+    """
+
+
+# Each namespace's variants, in declaration order.
+_variants: WeakKeyDictionary[type["Variants"], tuple[type["Variant"], ...]] = (
+    WeakKeyDictionary()
+)
+
+# The namespace each variant was declared in.
+_namespace_of: WeakKeyDictionary[type, type["Variants"]] = WeakKeyDictionary()
+
+# Each sealed namespace's alias.
+_sealed: WeakKeyDictionary[type, TypeAliasType] = WeakKeyDictionary()
+
+# Each variant's dataclass __init__, held back until its namespace is sealed.
+_inits: WeakKeyDictionary[type, Callable[..., None]] = WeakKeyDictionary()
 
 
 class _VariantMeta(type):
@@ -35,7 +59,31 @@ class _VariantMeta(type):
         if not bases or "__slots__" in namespace:
             return cls
         slotted: type[Any] = dataclass(frozen=True, slots=True)(cls)
+        # Construction is refused until the namespace is sealed. Seal puts
+        # the dataclass __init__ back, so a sealed variant costs nothing
+        # extra to construct. (Guarding __new__ instead would not work:
+        # deleting a __new__ from a class does not restore object.__new__'s
+        # argument handling.)
+        _inits[slotted] = slotted.__init__
+        slotted.__init__ = _refuse_unsealed
         return typing.cast(_VariantMeta, slotted)
+
+
+def _refuse_unsealed(self: object, *args: object, **kwargs: object) -> NoReturn:
+    """Stands in for a variant's __init__ until its namespace is sealed."""
+    cls = type(self)
+    namespace = _namespace_of.get(cls)
+    if namespace is None:
+        raise SuperEnumError(
+            f"{cls.__qualname__} is declared outside any namespace, so it belongs "
+            "to no sealed enum and cannot be constructed: declare it inside a "
+            "Variants subclass"
+        )
+    name = namespace.__qualname__
+    raise SuperEnumError(
+        f"{name} is not sealed: add {name}.seal(<alias>) right after the "
+        f"union alias that lists its variants, before constructing {cls.__qualname__}"
+    )
 
 
 @dataclass_transform(frozen_default=True)
@@ -45,34 +93,67 @@ class Variant(metaclass=_VariantMeta):
     __slots__ = ()
 
 
-# Each namespace's variants, in declaration order.
-_variants: WeakKeyDictionary[type["Variants"], tuple[type[Variant], ...]] = (
-    WeakKeyDictionary()
-)
+class _VariantsMeta(type):
+    """Locks a namespace once it is sealed, so its variants stay fixed."""
+
+    def __setattr__(cls, name: str, value: Any) -> None:
+        _check_unlocked(cls, name)
+        super().__setattr__(name, value)
+
+    def __delattr__(cls, name: str) -> None:
+        _check_unlocked(cls, name)
+        super().__delattr__(name)
 
 
-class Variants:
+def _check_unlocked(cls: type, name: str) -> None:
+    if cls in _sealed:
+        raise SuperEnumError(
+            f"{cls.__qualname__} is sealed: its attribute {name!r} cannot be "
+            "set or deleted"
+        )
+
+
+class Variants(metaclass=_VariantsMeta):
     """Base class for a namespace, which holds an enum's variants."""
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
+        # dict.fromkeys: a variant bound under a second name is listed once.
         _variants[cls] = tuple(
-            value
-            for value in vars(cls).values()
-            if isinstance(value, type) and issubclass(value, Variant)
+            dict.fromkeys(
+                value
+                for value in vars(cls).values()
+                if isinstance(value, type) and issubclass(value, Variant)
+            )
         )
+        for variant in _variants[cls]:
+            _namespace_of[variant] = cls
 
     @classmethod
     def seal(cls, alias: TypeAliasType) -> None:
-        """Connect the namespace to its union alias.
+        """Connect the namespace to its union alias, making it an enum.
 
-        The alias must list exactly the namespace's variants.
+        Checks that the alias lists exactly the namespace's variants, then
+        locks the namespace and allows its variants to be constructed.
         """
-        if set(_alias_variants(alias)) != set(_variants[cls]):
-            raise TypeError(
+        if cls in _sealed:
+            raise SuperEnumError(f"{cls.__qualname__} is already sealed")
+        declared = _variants[cls]
+        known: set[object] = set(declared)
+        listed = _alias_variants(alias)
+        problems: list[str] = []
+        if missing := [v for v in declared if v not in listed]:
+            problems.append(f"missing {_names(missing)}")
+        if extra := [v for v in listed if v not in known]:
+            problems.append(f"extra {_names(extra)}")
+        if problems:
+            raise SuperEnumError(
                 f"{alias.__name__} does not list exactly the variants of "
-                f"{cls.__qualname__}"
+                f"{cls.__qualname__}: {'; '.join(problems)}"
             )
+        for variant in declared:
+            type.__setattr__(variant, "__init__", _inits.pop(variant))
+        _sealed[cls] = alias
 
 
 def _alias_variants(alias: TypeAliasType) -> tuple[object, ...]:
@@ -81,3 +162,9 @@ def _alias_variants(alias: TypeAliasType) -> tuple[object, ...]:
     if typing.get_origin(value) in (types.UnionType, typing.Union):
         return typing.get_args(value)
     return (value,)
+
+
+def _names(members: Iterable[object]) -> str:
+    return ", ".join(
+        m.__qualname__ if isinstance(m, type) else repr(m) for m in members
+    )

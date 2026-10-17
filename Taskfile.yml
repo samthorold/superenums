@@ -22,6 +22,21 @@ tasks:
     cmds:
       - uv run python tests/typing/run.py
 
+  example:
+    desc: Run the bank tellers simulation (examples/bank_tellers.py, uses py-ev)
+    cmds:
+      - uv run examples/bank_tellers.py
+
+  example-check:
+    desc: Type-check the bank tellers example with pyright, mypy and ty
+    vars:
+      PY:
+        sh: uv python find --script examples/bank_tellers.py
+    cmds:
+      - uv run pyright --pythonpath {{.PY}} -p examples
+      - uv run mypy --strict --python-executable {{.PY}} --python-version 3.13 examples/bank_tellers.py
+      - uv run ty check --python {{.PY}} --python-version 3.13 examples/bank_tellers.py
+
   lint:
     desc: Lint and check formatting
     cmds:

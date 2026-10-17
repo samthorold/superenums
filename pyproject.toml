@@ -28,6 +28,7 @@ required-version = "==0.13.1"
 dev = [
     "actionlint-py==1.7.12.25",
     "cattrs==26.2.1",
+    "msgspec==0.22.0",
     "mypy==2.4.0",
     "pre-commit==4.7.0",
     "pydantic==2.14.1",

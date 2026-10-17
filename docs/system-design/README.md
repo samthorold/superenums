@@ -267,7 +267,34 @@ Checkers reject the alias as `structure`'s target (typed `type[T]`), and accept 
 
 ### Packaging: extras, not separate distributions
 
-The extensions ship in the `superenums` distribution as modules (`superenums.cattrs`, `superenums.pydantic`, `superenums.msgspec`), each needing its library through an extra (`superenums[pydantic]`). The core keeps zero dependencies: nothing outside an extension's own module imports its library, and a test checks that `superenums` imports with none of them installed.
+The extensions ship in the `superenums` distribution as modules (`superenums.cattrs`, `superenums.pydantic`), each needing its library through an extra (`superenums[pydantic]`). msgspec needs none: it goes through cattrs. The core keeps zero dependencies: nothing outside an extension's own module imports its library, and a test checks that `superenums` imports with none of them installed.
+
+### pydantic: a plain alias just works
+
+Given a union of plain dataclasses, pydantic writes no tag. Two unit variants both become `{}`, and same-shaped variants load as whichever comes first, without any error. A marker the user has to remember (`Annotated[Shape, ...]`) would leave every forgotten one losing data silently. So a plain `Shape` in a model writes and reads the tag, with nothing to import or configure.
+
+The tag is a `model_validator` (before: check the tag names this variant, and drop it), a wrap `model_serializer` (add the tag), and a `__get_pydantic_json_schema__` (add the tag to the schema as a required `const`). They live on `Variant`, so every variant inherits them, and pydantic applies a dataclass's inherited decorators like any other. This is pydantic's own mechanism for stdlib dataclasses, so generic variants (`Leaf[int]`), recursive enums, schema reuse and JSON Schema `$defs` all behave as for any dataclass.
+
+The decorators are pydantic objects, so `superenums.pydantic` installs them, and the core must not import pydantic. The variant metaclass defines a `__pydantic_config__` property: pydantic reads it from every dataclass before it collects the dataclass's decorators, generic ones included, and the property installs the decorators on its first read. It then behaves like the plain attribute: a variant's own config (in its class body, or from `pydantic.with_config`) is returned, and with none it raises `AttributeError`, which pydantic before 2.14 relies on. The same read refuses a variant with a field named `type`, the tag key. This is the one place the core knows about a serialization library: it is justified by the silent data loss, and the tag itself uses only the public introspection API. It depends on pydantic reading that attribute before collecting decorators, which the tests pin (`pydantic>=2.11`).
+
+The tag key is always `"type"`, because the decorators belong to the variant and never see the alias. pydantic tries the variants in turn rather than dispatching on the tag, so a validation error lists every variant, and it can't check tags are unique: two variants with the same name in one alias load as the first. An alias-level marker (`Annotated[Shape, superenums.pydantic.Tagged(key="kind")]`) could add a custom key, dispatch on the tag and the uniqueness check; it is deferred until someone needs it.
+
+Rejected: `__get_pydantic_core_schema__` on `Variant`. pydantic deliberately never calls it for a parametrised generic dataclass (`Leaf[int]`), so generic enums would lose their tags silently. And because the hook wraps the dataclass schema pydantic registers under the class's own reference, a second use of the same variant in one model picked up the untagged schema.
+
+### msgspec: through cattrs, no module of its own
+
+msgspec writes every dataclass itself, so a variant comes out without its tag wherever msgspec meets it, inside a Struct or a list as much as on its own, and `enc_hook` is never called for it. It also refuses a union of more than one dataclass when a decoder is built, and `dec_hook` covers only types msgspec doesn't know. No extension can change how msgspec treats a variant inside msgspec's own calls.
+
+cattrs' msgspec converter (`cattrs.preconf.msgspec.make_converter`) already does the job: configured with `superenums.cattrs.configure`, cattrs adds and reads the tags and msgspec writes and parses the bytes. That covers dataclasses and attrs classes holding enums, enums on their own, and generic and recursive enums, with no new code. The guide documents it, and `tests/test_msgspec.py` pins it.
+
+What is left unsupported is an enum inside a `msgspec.Struct`: the converter hands Structs to msgspec, which drops the tag on writing and refuses the union on reading. Every alternative leaves the same gap, because msgspec handles a Struct's fields itself. The alternatives, rejected because they cost more without closing it:
+
+- **superenums' own `encode`/`decode`**: walk the value before encoding to add tags, and decode through a marker type per alias so `dec_hook` can dispatch on the tag. About as much code as the cattrs extension, no faster.
+- **Generated Structs**: a tagged `msgspec.Struct` per variant, decoded at msgspec speed and with msgspec's JSON Schema, but needing field types rewritten (containers, generics) and values converted recursively in both directions.
+
+### Packaging: extras, not separate distributions
+
+The extensions ship in the `superenums` distribution as modules (`superenums.cattrs`, `superenums.pydantic`), each needing its library through an extra (`superenums[pydantic]`). msgspec needs none: it goes through cattrs. The core keeps zero dependencies: nothing outside an extension's own module imports its library, and a test checks that `superenums` imports with none of them installed.
 
 ### pydantic: a plain alias just works
 

@@ -78,7 +78,7 @@ class Arrivals:
             case BankEvents.CustomerArrived(customer=c):
                 if not self.closed:
                     gap = minutes(self.rng, self.mean_gap)
-                    yield BankEvents.CustomerArrived(c + 1), t + gap
+                    yield BankEvents.CustomerArrived(customer=c + 1), t + gap
             case BankEvents.DoorsClosed():
                 self.closed = True
             case (
@@ -113,18 +113,20 @@ class Bank:
     def __call__(self, event: BankEvent, t: int) -> Scheduled:
         match event:
             case BankEvents.CustomerArrived(customer=c) if not self.doors_open:
-                yield BankEvents.CustomerTurnedAway(c), t
+                yield BankEvents.CustomerTurnedAway(customer=c), t
             case BankEvents.CustomerArrived(customer=c):
                 if self.free:
-                    yield BankEvents.ServiceStarted(c, self.free.pop()), t
+                    teller = self.free.pop()
+                    yield BankEvents.ServiceStarted(customer=c, teller=teller), t
                 else:
                     self.queue.append(c)
             case BankEvents.ServiceStarted(customer=c, teller=teller):
                 done = t + minutes(self.rng, self.mean_service)
-                yield BankEvents.ServiceFinished(c, teller), done
+                yield BankEvents.ServiceFinished(customer=c, teller=teller), done
             case BankEvents.ServiceFinished(teller=teller):
                 if self.queue:
-                    yield BankEvents.ServiceStarted(self.queue.popleft(), teller), t
+                    c = self.queue.popleft()
+                    yield BankEvents.ServiceStarted(customer=c, teller=teller), t
                 else:
                     self.free.append(teller)
             case BankEvents.DoorsClosed():
@@ -217,7 +219,7 @@ def simulate(
             Trace(trace_until),
         ]
     )
-    loop.add_event(BankEvents.CustomerArrived(0), 0)
+    loop.add_event(BankEvents.CustomerArrived(customer=0), 0)
     loop.add_event(BankEvents.DoorsClosed(), closes_at)
     loop.run()
     return stats

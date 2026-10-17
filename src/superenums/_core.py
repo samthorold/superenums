@@ -203,6 +203,12 @@ class Variants(metaclass=_VariantsMeta):
                 "namespace subclasses Variants directly, so each variant belongs "
                 "to exactly one enum"
             )
+        if "seal" in vars(cls):
+            raise SuperEnumError(
+                f"{cls.__qualname__} binds the name 'seal', which would hide "
+                "Variants.seal so the namespace could never be sealed: rename it "
+                "(a variant named 'Seal' is fine)"
+            )
         # dict.fromkeys: a variant bound under a second name is listed once.
         _variants[cls] = tuple(
             dict.fromkeys(
@@ -289,3 +295,60 @@ def _names(members: Iterable[object]) -> str:
     return ", ".join(
         m.__qualname__ if isinstance(m, type) else repr(m) for m in members
     )
+
+
+# Introspection: the public, read-only description of an enum that extensions
+# build on. Functions, not namespace attributes, so no variant name can shadow
+# them. A variant's fields are the standard dataclasses.fields.
+
+
+def variants(namespace: type[Variants]) -> tuple[type[Variant], ...]:
+    """A namespace's variants, in declaration order."""
+    return _variants[namespace]
+
+
+def alias(namespace: type[Variants]) -> TypeAliasType:
+    """A sealed namespace's union alias.
+
+    Raises ``SuperEnumError`` if the namespace is not sealed yet.
+    """
+    if namespace not in _sealed:
+        name = namespace.__qualname__
+        raise SuperEnumError(
+            f"{name} is not sealed, so it has no alias yet: add "
+            f"{name}.seal(<alias>) right after the union alias that lists its "
+            "variants"
+        )
+    return _sealed[namespace]
+
+
+def namespace_of(variant: type[Variant] | Variant) -> type[Variants]:
+    """The namespace a variant class, or a variant value's class, belongs to.
+
+    Raises ``SuperEnumError`` for a variant declared outside any namespace.
+    """
+    cls = _variant_class(variant)
+    namespace = _namespace_of.get(cls)
+    if namespace is None:
+        raise SuperEnumError(
+            f"{cls.__qualname__} is declared outside any namespace, so it "
+            "belongs to no enum: declare it inside a Variants subclass"
+        )
+    return namespace
+
+
+def variant_name(variant: type[Variant] | Variant) -> str:
+    """A variant's name: its plain class name (``"Circle"``), for a variant
+    class or a variant value."""
+    cls = _variant_class(variant)
+    return cls.__name__
+
+
+def _variant_class(variant: object) -> type:
+    """The variant class of a variant class, value, or subscripted generic
+    variant (``Trees.Leaf[int]``)."""
+    if isinstance(variant, type):
+        return variant
+    if isinstance(origin := typing.get_origin(variant), type):
+        return origin
+    return type(variant)

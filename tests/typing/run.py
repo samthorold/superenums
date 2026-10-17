@@ -31,11 +31,16 @@ which is pyright's positive proof that the match is exhaustive.
 
 pyright and mypy failures fail the run. ty is pre-1.0, so its result is
 reported but never fails the run.
+
+The run also type-checks every documentation example (``doc_examples_check``),
+with the same required/advisory split.
 """
 
 import subprocess
 import sys
 from pathlib import Path
+
+import doc_examples_check
 
 HERE = Path(__file__).resolve().parent
 CASES = HERE / "cases"
@@ -55,6 +60,8 @@ def main() -> int:
         returncode = subprocess.run(command, cwd=cwd, check=False).returncode
         if returncode != 0:
             failed.append(name if required else f"{name} (advisory)")
+    if doc_examples_check.main() != 0:
+        failed.append("doc examples")
     if failed:
         print(f"type-level suite: failures in {', '.join(failed)}")
     else:

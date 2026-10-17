@@ -262,6 +262,7 @@ assert is_lit(Lights.On(brightness=5))
 > [!WARNING]
 > **Unit-variant patterns need parentheses.** Write `case Lights.Off():`, never `case Lights.Off:`. Without parentheses, Python reads the pattern as a *value* pattern, which compares the subject with the class `Lights.Off` itself. No value is equal to the class, so the arm never matches. A type checker reports the `match` as non-exhaustive at the `assert_never` arm. In unchecked code the value falls through to that arm and raises at runtime:
 >
+> <!-- expect-type-errors -->
 > ```python
 > from typing import assert_never
 >

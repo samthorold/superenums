@@ -8,17 +8,41 @@ variant the user declares.
 import types
 import typing
 from dataclasses import dataclass
-from typing import TypeAliasType, dataclass_transform
+from typing import Any, TypeAliasType, dataclass_transform
 from weakref import WeakKeyDictionary
 
 
+class _VariantMeta(type):
+    """Makes each variant class a frozen, slotted dataclass as it is created.
+
+    ``dataclass(slots=True)`` builds a new class rather than changing the one
+    it is given, so it runs here, before the class is returned and bound in
+    the namespace body. Each variant is then a single class object: the one
+    the namespace collects, the alias names, and ``seal`` compares.
+    """
+
+    def __new__(
+        mcls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+        **kwargs: Any,
+    ) -> "_VariantMeta":
+        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+        # Variant itself is not a dataclass. A namespace that already has
+        # __slots__ is dataclass rebuilding the slotted class through this
+        # metaclass: return it as built.
+        if not bases or "__slots__" in namespace:
+            return cls
+        slotted: type[Any] = dataclass(frozen=True, slots=True)(cls)
+        return typing.cast(_VariantMeta, slotted)
+
+
 @dataclass_transform(frozen_default=True)
-class Variant:
+class Variant(metaclass=_VariantMeta):
     """Base class for a variant: one alternative of an enum."""
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        dataclass(frozen=True)(cls)
+    __slots__ = ()
 
 
 # Each namespace's variants, in declaration order.

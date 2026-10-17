@@ -56,6 +56,7 @@ def describe(s: Shape) -> str:               # behaviour = free functions with o
 - **pyright config lives in `pyrightconfig.json`, not `pyproject.toml`.** pyright prefers any `pyrightconfig.json` in a parent directory (e.g. one in `~`) over a `[tool.pyright]` section, which can make it scan the whole home directory and run out of memory.
 - **ty narrows variants to intersections** (`Rect & ~Circle`) in later `case` arms, because without `@final` a class could inherit from two variants. Exact `assert_type` on the subject fails in ty only; the suite records this with `# ty: ignore[assert-type-unspellable-subtype]`. Exhaustiveness is unaffected.
 
+- **`dataclass(slots=True)` returns a new class.** Variants are made slotted dataclasses in a metaclass (`_VariantMeta.__new__`), before the class is bound in the namespace body, so each variant is one class object. Doing it in `__init_subclass__` would leave the namespace body, the collected variants, and `seal` holding the unslotted original.
 - **Annotating with the namespace class** (`s: Shapes` instead of the union alias `s: Shape`) silently defeats exhaustiveness. It is currently only discouraged. Watch how often it bites during development, and consider stronger prevention (see `docs/system-design/README.md`).
 - **Unit variant pattern without parentheses** (`case Shapes.Empty:` instead of `case Shapes.Empty():`) never matches. Checkers catch it as a non-exhaustive match; unchecked code fails silently.
 

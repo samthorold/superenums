@@ -30,6 +30,9 @@ jobs:
     env:
       # Every `uv` command, including the ones the hooks run, uses this Python.
       UV_PYTHON: ${{ matrix.python-version }}
+      # uv's own builds give the latest patch release; the runner's system
+      # Python can lag (3.12.3, which predates fixes the tests rely on).
+      UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@v7
 

@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization, then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
+The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization (designed in `docs/system-design/`: tag inside the object, extras, a pydantic hook on `Variant`; build order cattrs, pydantic, msgspec), then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
 
 ## Commands
 

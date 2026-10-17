@@ -28,6 +28,10 @@ _Avoid_: constant, singleton variant, empty variant
 A named, typed piece of data carried by a **Variant**. Fields are always named, even when a pattern or constructor gives them positionally.
 _Avoid_: payload, associated value, member, attribute
 
+**Tag**:
+The **Variant** name a serialized value carries, inside the object next to its **Fields**: `{"type": "Circle", "radius": 1.0}`. The key (`"type"` by default) is the tag key.
+_Avoid_: discriminator, kind (as names for our concept)
+
 **Exhaustive match**:
 A match over an **Enum** that handles every **Variant**.
 _Avoid_: complete match, total match
@@ -43,6 +47,7 @@ _Avoid_: closed, final
 - An enum's **Variants** and the functions over it live in one module, which serves as their namespace (`shapes.Circle`, `shapes.area`).
 - A **Variant** has zero or more **Fields**. One with zero is a **Unit variant**.
 - Every **Enum** is **Sealed**.
+- A serialized **Variant** carries its **Tag**, which by default is its class name.
 
 ## Flagged ambiguities
 

@@ -1,0 +1,42 @@
+[project]
+name = "superenums"
+version = "0.1.0"
+description = "Rust-style enums for Python: variants that carry data, and type-checker-proven exhaustive matching."
+readme = "README.md"
+authors = [
+    { name = "Sam Thorold", email = "sam.thorold@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy==2.4.0",
+    "pyright==1.1.414",
+    "pytest==9.1.1",
+    "ruff==0.17.1",
+    "ty==0.0.89",
+]
+
+[tool.ruff]
+target-version = "py312"
+# The design docs keep their compact one-line examples.
+extend-exclude = ["docs", "CLAUDE.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+# Library source: strict. pyright's config is pyrightconfig.json (a pyproject
+# section loses to any pyrightconfig.json in a parent directory). The type-level
+# suite has its own configs in tests/typing/.
+[tool.mypy]
+files = ["src"]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

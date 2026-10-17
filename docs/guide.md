@@ -684,7 +684,7 @@ An enum made only of unit variants is still allowed, so removing the last varian
 
 ## Serialization
 
-Serialization is an extension, with one module per library. Each writes a value as an object holding its fields plus a tag naming its variant, `{"type": "Circle", "radius": 1.0}` ([why](system-design/README.md#serialization-the-tag-goes-inside-the-object)). A unit variant is just its tag, `{"type": "Empty"}`, and loading it gives back its one value.
+Serialization is an extension: `superenums.cattrs` and `superenums.pydantic`, with msgspec going through cattrs. Each writes a value as an object holding its fields plus a tag naming its variant, `{"type": "Circle", "radius": 1.0}` ([why](system-design/README.md#serialization-the-tag-goes-inside-the-object)). A unit variant is just its tag, `{"type": "Empty"}`, and loading it gives back its one value.
 
 ### cattrs
 
@@ -777,6 +777,48 @@ assert shapes.validate_json('{"type": "Empty"}') is Empty()
 - **A variant in an untyped field (`Any`, `dict[str, Any]`) is written as a plain dataclass, without its tag**: pydantic only knows to tag it from the annotation.
 - pydantic config on a variant (`pydantic.with_config`, or `__pydantic_config__` in the class body) is honoured.
 - Validation errors list every variant, since pydantic tries each one in turn.
+
+### msgspec
+
+msgspec goes through cattrs: cattrs' msgspec converter adds and reads the tags, and msgspec writes and parses the JSON. Install `superenums[cattrs]` and `msgspec`.
+
+```python
+from dataclasses import dataclass
+
+from cattrs.preconf.msgspec import make_converter
+
+import superenums.cattrs
+from superenums import Variant
+
+
+class Circle(Variant):
+    radius: float
+
+
+class Empty(Variant): ...
+
+
+type Shape = Circle | Empty
+
+
+@dataclass(frozen=True)
+class Drawing:
+    name: str
+    shape: Shape
+
+
+converter = make_converter()
+superenums.cattrs.configure(Shape, converter)
+
+data = converter.dumps(Drawing("dot", Circle(1.0)))
+assert data == b'{"name":"dot","shape":{"type":"Circle","radius":1.0}}'
+assert converter.loads(data, Drawing) == Drawing("dot", Circle(1.0))
+```
+
+The cattrs notes above apply. In addition:
+
+- **Keep enums out of `msgspec.Struct`s; hold them in dataclasses or attrs classes.** The converter hands a Struct straight to msgspec, which writes a variant inside it as a plain dataclass, dropping the tag without any error, and refuses to read a union of dataclasses.
+- Calling `msgspec.json.encode` on a value directly drops the tags the same way: always go through the converter.
 
 ## Introspection
 

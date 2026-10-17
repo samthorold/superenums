@@ -1,32 +1,31 @@
 """Unit variants: a variant with no fields has exactly one value.
 
-The enum lives at module level so pickle can find its variants by qualified
-name.
+The variants live at module level so pickle can find them by qualified name.
 """
 
 import copy
 import dataclasses
 import pickle
+import types
 from collections.abc import Callable
 
 import pytest
 
-from superenums import SuperEnumError, Variant, Variants
+from superenums import Variant
 
 
-class Shapes(Variants):
-    class Circle(Variant):
-        radius: float
-
-    class Empty(Variant): ...
+class Circle(Variant):
+    radius: float
 
 
-type Shape = Shapes.Circle | Shapes.Empty
-Shapes.seal(Shape)
+class Empty(Variant): ...
+
+
+type Shape = Circle | Empty
 
 
 def test_calling_a_unit_variant_always_returns_the_same_value() -> None:
-    assert Shapes.Empty() is Shapes.Empty()
+    assert Empty() is Empty()
 
 
 def _pickled(protocol: int) -> Callable[[object], object]:
@@ -55,7 +54,7 @@ duplicates = pytest.mark.parametrize(
 def test_a_duplicated_unit_value_is_the_same_value(
     duplicate: Callable[[object], object],
 ) -> None:
-    empty = Shapes.Empty()
+    empty = Empty()
     assert duplicate(empty) is empty
 
 
@@ -63,47 +62,37 @@ def test_a_duplicated_unit_value_is_the_same_value(
 def test_a_duplicated_variant_with_fields_is_an_equal_value(
     duplicate: Callable[[object], object],
 ) -> None:
-    circle = Shapes.Circle(radius=2.0)
+    circle = Circle(radius=2.0)
     duplicated = duplicate(circle)
     assert duplicated == circle
-    assert type(duplicated) is Shapes.Circle
-
-
-def test_an_unsealed_unit_variant_still_refuses_construction() -> None:
-    class Lights(Variants):
-        class Off(Variant): ...
-
-    with pytest.raises(SuperEnumError, match="not sealed"):
-        Lights.Off()
+    assert type(duplicated) is Circle
 
 
 def test_replacing_a_unit_value_gives_back_the_same_value() -> None:
-    empty = Shapes.Empty()
+    empty = Empty()
     assert dataclasses.replace(empty) is empty
 
 
 def test_a_variant_whose_fields_all_have_defaults_is_not_a_unit_variant() -> None:
-    class Sizes(Variants):
-        class Box(Variant):
-            side: float = 1.0
+    class Box(Variant):
+        side: float = 1.0
 
-    type Size = Sizes.Box
-    Sizes.seal(Size)
-    assert Sizes.Box() == Sizes.Box()
-    assert Sizes.Box() is not Sizes.Box()
-    assert Sizes.Box(side=2.0).side == 2.0
+    assert Box() == Box()
+    assert Box() is not Box()
+    assert Box(side=2.0).side == 2.0
 
 
 def test_a_unit_variant_refuses_arguments() -> None:
     with pytest.raises(TypeError):
-        Shapes.Empty(1)  # type: ignore[call-arg]
+        Empty(1)  # type: ignore[call-arg]
 
 
 def test_a_unit_pattern_without_parentheses_never_matches_a_unit_value() -> None:
-    # The documented trap: `case Shapes.Empty:` is a value pattern comparing
-    # against the class itself, not a class pattern.
-    match Shapes.Empty():
-        case Shapes.Empty:  # type: ignore[misc]
+    # The documented trap: `case shapes.Empty:` (a dotted name) is a value
+    # pattern comparing against the class itself, not a class pattern.
+    shapes = types.SimpleNamespace(Empty=Empty)  # stands in for the module
+    match Empty():
+        case shapes.Empty:
             matched = True
         case _:
             matched = False

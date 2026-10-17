@@ -1,15 +1,16 @@
 from typing import assert_never
 
-from shapes import Shape, Shapes
+import shapes
+from shapes import Shape
 
 
 def complete(s: Shape) -> None:
     match s:
-        case Shapes.Circle():
+        case shapes.Circle():
             pass
-        case Shapes.Rect():
+        case shapes.Rect():
             pass
-        case Shapes.Empty():
+        case shapes.Empty():
             pass
         case _:
             assert_never(s)  # pyright: ignore[reportUnreachable]
@@ -17,23 +18,23 @@ def complete(s: Shape) -> None:
 
 def missing_a_variant(s: Shape) -> None:
     match s:
-        case Shapes.Circle():
+        case shapes.Circle():
             pass
-        case Shapes.Rect():
+        case shapes.Rect():
             pass
         case _:
             assert_never(s)  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]  # ty: ignore[type-assertion-failure]
 
 
 def unit_pattern_without_parentheses(s: Shape) -> None:
-    # `case Shapes.Empty:` compares against the class itself, so it never
+    # `case shapes.Empty:` compares against the class itself, so it never
     # matches a unit value and does not count towards exhaustiveness.
     match s:
-        case Shapes.Circle():
+        case shapes.Circle():
             pass
-        case Shapes.Rect():
+        case shapes.Rect():
             pass
-        case Shapes.Empty:
+        case shapes.Empty:
             pass
         case _:
             assert_never(s)  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]  # ty: ignore[type-assertion-failure]

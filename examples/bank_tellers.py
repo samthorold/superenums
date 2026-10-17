@@ -26,37 +26,39 @@ from typing import assert_never
 
 from pyev import EventLoop
 
-from superenums import Variant, Variants
+from superenums import Variant
 
 
-class BankEvents(Variants):
-    class CustomerArrived(Variant):
-        customer: int
+class CustomerArrived(Variant):
+    customer: int
 
-    class ServiceStarted(Variant):
-        _: KW_ONLY  # two ints: never positional
-        customer: int
-        teller: int
 
-    class ServiceFinished(Variant):
-        _: KW_ONLY  # two ints: never positional
-        customer: int
-        teller: int
+class ServiceStarted(Variant):
+    _: KW_ONLY  # two ints: never positional
+    customer: int
+    teller: int
 
-    class CustomerTurnedAway(Variant):
-        customer: int
 
-    class DoorsClosed(Variant): ...
+class ServiceFinished(Variant):
+    _: KW_ONLY  # two ints: never positional
+    customer: int
+    teller: int
+
+
+class CustomerTurnedAway(Variant):
+    customer: int
+
+
+class DoorsClosed(Variant): ...
 
 
 type BankEvent = (
-    BankEvents.CustomerArrived
-    | BankEvents.ServiceStarted
-    | BankEvents.ServiceFinished
-    | BankEvents.CustomerTurnedAway
-    | BankEvents.DoorsClosed
+    CustomerArrived
+    | ServiceStarted
+    | ServiceFinished
+    | CustomerTurnedAway
+    | DoorsClosed
 )
-BankEvents.seal(BankEvent)
 
 # What a process returns: events to schedule, each with its timestep.
 type Scheduled = Iterator[tuple[BankEvent, int]]
@@ -77,17 +79,13 @@ class Arrivals:
 
     def __call__(self, event: BankEvent, t: int) -> Scheduled:
         match event:
-            case BankEvents.CustomerArrived(customer=c):
+            case CustomerArrived(customer=c):
                 if not self.closed:
                     gap = minutes(self.rng, self.mean_gap)
-                    yield BankEvents.CustomerArrived(customer=c + 1), t + gap
-            case BankEvents.DoorsClosed():
+                    yield CustomerArrived(customer=c + 1), t + gap
+            case DoorsClosed():
                 self.closed = True
-            case (
-                BankEvents.ServiceStarted()
-                | BankEvents.ServiceFinished()
-                | BankEvents.CustomerTurnedAway()
-            ):
+            case ServiceStarted() | ServiceFinished() | CustomerTurnedAway():
                 pass
             case _:
                 assert_never(event)
@@ -114,27 +112,27 @@ class Bank:
 
     def __call__(self, event: BankEvent, t: int) -> Scheduled:
         match event:
-            case BankEvents.CustomerArrived(customer=c) if not self.doors_open:
-                yield BankEvents.CustomerTurnedAway(customer=c), t
-            case BankEvents.CustomerArrived(customer=c):
+            case CustomerArrived(customer=c) if not self.doors_open:
+                yield CustomerTurnedAway(customer=c), t
+            case CustomerArrived(customer=c):
                 if self.free:
                     teller = self.free.pop()
-                    yield BankEvents.ServiceStarted(customer=c, teller=teller), t
+                    yield ServiceStarted(customer=c, teller=teller), t
                 else:
                     self.queue.append(c)
-            case BankEvents.ServiceStarted(customer=c, teller=teller):
+            case ServiceStarted(customer=c, teller=teller):
                 done = t + minutes(self.rng, self.mean_service)
-                yield BankEvents.ServiceFinished(customer=c, teller=teller), done
-            case BankEvents.ServiceFinished(teller=teller):
+                yield ServiceFinished(customer=c, teller=teller), done
+            case ServiceFinished(teller=teller):
                 if self.queue:
                     c = self.queue.popleft()
-                    yield BankEvents.ServiceStarted(customer=c, teller=teller), t
+                    yield ServiceStarted(customer=c, teller=teller), t
                 else:
                     self.free.append(teller)
-            case BankEvents.DoorsClosed():
+            case DoorsClosed():
                 # Customers already inside are still served.
                 self.doors_open = False
-            case BankEvents.CustomerTurnedAway():
+            case CustomerTurnedAway():
                 pass
             case _:
                 assert_never(event)
@@ -151,15 +149,15 @@ class Stats:
 
     def __call__(self, event: BankEvent, t: int) -> Scheduled:
         match event:
-            case BankEvents.CustomerArrived(customer=c):
+            case CustomerArrived(customer=c):
                 self.arrived_at[c] = t
-            case BankEvents.ServiceStarted(customer=c):
+            case ServiceStarted(customer=c):
                 self.waits.append(t - self.arrived_at.pop(c))
-            case BankEvents.ServiceFinished():
+            case ServiceFinished():
                 self.last_departure = t
-            case BankEvents.CustomerTurnedAway():
+            case CustomerTurnedAway():
                 self.turned_away += 1
-            case BankEvents.DoorsClosed():
+            case DoorsClosed():
                 pass
             case _:
                 assert_never(event)
@@ -177,15 +175,15 @@ class Stats:
 
 def describe(event: BankEvent) -> str:
     match event:
-        case BankEvents.CustomerArrived(customer=c):
+        case CustomerArrived(customer=c):
             return f"customer {c} arrives"
-        case BankEvents.ServiceStarted(customer=c, teller=teller):
+        case ServiceStarted(customer=c, teller=teller):
             return f"teller {teller} starts serving customer {c}"
-        case BankEvents.ServiceFinished(customer=c, teller=teller):
+        case ServiceFinished(customer=c, teller=teller):
             return f"teller {teller} finishes with customer {c}"
-        case BankEvents.CustomerTurnedAway(customer=c):
+        case CustomerTurnedAway(customer=c):
             return f"customer {c} is turned away"
-        case BankEvents.DoorsClosed():
+        case DoorsClosed():
             return "doors close"
         case _:
             assert_never(event)
@@ -221,8 +219,8 @@ def simulate(
             Trace(trace_until),
         ]
     )
-    loop.add_event(BankEvents.CustomerArrived(customer=0), 0)
-    loop.add_event(BankEvents.DoorsClosed(), closes_at)
+    loop.add_event(CustomerArrived(customer=0), 0)
+    loop.add_event(DoorsClosed(), closes_at)
     loop.run()
     return stats
 

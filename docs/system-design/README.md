@@ -2,7 +2,7 @@
 
 superenums brings Rust-style enums (sum types whose variants carry data) to Python. It is a production library for typed codebases.
 
-> **Status:** this document describes the design from 0.2.0 on: the enum is its union alias, and variants live at module level. 0.1.0 implemented an earlier design with a namespace class and `seal`; the code, guide and tests are being migrated to this one. Why the namespace was dropped is recorded under [Rejected: a namespace class](#rejected-a-namespace-class).
+> This document describes the design from 0.2.0 on: the enum is its union alias, and variants live at module level. 0.1.0 had an earlier design with a namespace class and `seal`. Why the namespace was dropped is recorded under [Rejected: a namespace class](#rejected-a-namespace-class).
 
 ## Core promise
 

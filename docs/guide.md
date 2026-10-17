@@ -180,6 +180,63 @@ mypy and ty have no equivalent, which is why the `assert_never` arm is the stand
 
 The same holds wherever an enum appears in a type: `list[Shape]`, `dict[str, Shape]`, `Shape | None`, a field typed with another enum.
 
+### Handling only some variants
+
+A function often cares about only a few variants: a logger that reports only errors, or a process in a simulation that reacts only to arrivals. There are two ways to write the rest, and which one you use is a deliberate choice.
+
+**List the rest in an ignore arm**, then end with the standard `assert_never` arm:
+
+```python
+from typing import assert_never
+
+from superenums import Variant, Variants
+
+
+class Events(Variants):
+    class Arrived(Variant):
+        customer: int
+
+    class ServiceStarted(Variant):
+        customer: int
+
+    class ServiceFinished(Variant):
+        customer: int
+
+    class DoorsClosed(Variant): ...
+
+
+type Event = (
+    Events.Arrived | Events.ServiceStarted | Events.ServiceFinished | Events.DoorsClosed
+)
+Events.seal(Event)
+
+
+def queue_length(events: list[Event]) -> int:
+    waiting = 0
+    for event in events:
+        match event:
+            case Events.Arrived():
+                waiting += 1
+            case Events.ServiceStarted():
+                waiting -= 1
+            case Events.ServiceFinished() | Events.DoorsClosed():
+                pass  # no effect on the queue
+            case _:
+                assert_never(event)
+    return waiting
+
+
+assert (
+    queue_length([Events.Arrived(1), Events.Arrived(2), Events.ServiceStarted(1)]) == 1
+)
+```
+
+Add a variant and this `match` fails to type-check until the new variant is put in an arm, even if that arm is the ignore arm. Each such function makes its own decision about the new variant. Use this form when the function is only correct if it sees every variant that matters to it. Here, a new `CustomerLeftQueue` variant has to reduce the count.
+
+**Or end with `case _: pass`** (or `case _: return None`, or whatever "not interested" means in that function) in place of the `assert_never` arm. A new variant then falls into the wildcard, and no checker reports it. Use this form when the function stays correct whatever variants are added, such as a filter that picks out one variant.
+
+Neither form is a loophole. The wildcard form opts that one `match` out of exhaustiveness checking, and it's visible in the code. What superenums guarantees is that the explicit form is checked, not that every `match` uses it. The examples in this guide all use the standard arm.
+
 ## Variant values
 
 A variant is a frozen, slotted dataclass. Its values are immutable, compare and hash by variant and field values, and have a readable `repr`. To change a value, make a new one with `dataclasses.replace`.

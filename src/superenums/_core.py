@@ -36,6 +36,11 @@ _sealed: WeakKeyDictionary[type, TypeAliasType] = WeakKeyDictionary()
 _inits: WeakKeyDictionary[type, Callable[..., None]] = WeakKeyDictionary()
 
 
+# Marks a variant class while superenums makes it a dataclass, including the
+# class dataclass(slots=True) rebuilds from it.
+_BUILDING = "__superenums_building__"
+
+
 class _VariantMeta(type):
     """Makes each variant class a frozen, slotted dataclass as it is created.
 
@@ -52,13 +57,21 @@ class _VariantMeta(type):
         namespace: dict[str, Any],
         **kwargs: Any,
     ) -> "_VariantMeta":
+        # dataclass rebuilding the slotted class through this metaclass:
+        # return it as built.
+        if _BUILDING in namespace:
+            return super().__new__(mcls, name, bases, namespace)
+        if bases:
+            _check_declaration(name, bases, namespace, kwargs)
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
-        # Variant itself is not a dataclass. A namespace that already has
-        # __slots__ is dataclass rebuilding the slotted class through this
-        # metaclass: return it as built.
-        if not bases or "__slots__" in namespace:
+        # Variant itself is not a dataclass.
+        if not bases:
             return cls
+        # The marker is copied into the namespace dataclass rebuilds the
+        # slotted class from, which is how the rebuild is told apart.
+        type.__setattr__(cls, _BUILDING, True)
         slotted: type[Any] = dataclass(frozen=True, slots=True)(cls)
+        type.__delattr__(slotted, _BUILDING)
         # Construction is refused until the namespace is sealed. Seal puts
         # the dataclass __init__ back, so a sealed variant costs nothing
         # extra to construct. (Guarding __new__ instead would not work:
@@ -67,6 +80,53 @@ class _VariantMeta(type):
         _inits[slotted] = slotted.__init__
         slotted.__init__ = _refuse_unsealed
         return typing.cast(_VariantMeta, slotted)
+
+    def __setattr__(cls, name: str, value: Any) -> None:
+        # dataclass records its options on a class before anything else, so
+        # @dataclass applied over a finished variant is refused here, before
+        # it changes the class. superenums' own dataclass call runs while the
+        # class still carries the building marker.
+        if name == "__dataclass_params__" and _BUILDING not in vars(cls):
+            raise SuperEnumError(
+                f"{cls.__qualname__} is decorated with @dataclass: a variant is "
+                "already a frozen, slotted dataclass, the same for every "
+                "variant, so remove the decorator"
+            )
+        super().__setattr__(name, value)
+
+
+def _check_declaration(
+    name: str,
+    bases: tuple[type, ...],
+    namespace: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> None:
+    """Refuse a variant declaration that would go beyond what it says.
+
+    Every variant subclasses Variant directly and is the same frozen, slotted
+    dataclass, so nothing in its declaration may change that.
+    """
+    if variants := [b for b in bases if b is not Variant and issubclass(b, Variant)]:
+        raise SuperEnumError(
+            f"{name} cannot subclass {_names(variants)}: a variant subclasses "
+            "Variant directly, so an enum's values are exactly the variants "
+            "its declaration lists"
+        )
+    if kwargs:
+        raise SuperEnumError(
+            f"{name} passes class keywords ({', '.join(kwargs)}): every "
+            "variant is a frozen, slotted dataclass, with no options"
+        )
+    if overrides := [m for m in ("__setattr__", "__delattr__") if m in namespace]:
+        raise SuperEnumError(
+            f"{name} defines {', '.join(overrides)}: a variant is frozen, so "
+            "its values cannot change after construction"
+        )
+    if "__slots__" in namespace:
+        raise SuperEnumError(
+            f"{name} declares __slots__: a variant's slots are exactly its "
+            "fields, which superenums declares for it"
+        )
 
 
 def _refuse_unsealed(self: object, *args: object, **kwargs: object) -> NoReturn:
@@ -118,6 +178,15 @@ class Variants(metaclass=_VariantsMeta):
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
+        bases = cls.__bases__
+        if namespaces := [
+            b for b in bases if b is not Variants and issubclass(b, Variants)
+        ]:
+            raise SuperEnumError(
+                f"{cls.__qualname__} cannot subclass {_names(namespaces)}: a "
+                "namespace subclasses Variants directly, so each variant belongs "
+                "to exactly one enum"
+            )
         # dict.fromkeys: a variant bound under a second name is listed once.
         _variants[cls] = tuple(
             dict.fromkeys(

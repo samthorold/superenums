@@ -67,7 +67,7 @@ def test_seal_rejects_an_alias_that_does_not_list_exactly_the_variants() -> None
 
 def test_a_variant_value_rejects_an_undeclared_attribute() -> None:
     circle = Shapes.Circle(1.0)
-    with pytest.raises((AttributeError, TypeError)):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         circle.colour = "red"  # type: ignore[attr-defined]
     with pytest.raises(AttributeError):
         object.__setattr__(circle, "colour", "red")
@@ -91,6 +91,8 @@ def test_a_variant_value_is_immutable() -> None:
     circle = Shapes.Circle(1.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
         circle.radius = 2.0  # type: ignore[misc]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        del circle.radius
     assert circle.radius == 1.0
 
 

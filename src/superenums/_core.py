@@ -8,7 +8,7 @@ variant the user declares.
 import types
 import typing
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, fields
+from dataclasses import FrozenInstanceError, dataclass, fields
 from typing import Any, NoReturn, TypeAliasType, dataclass_transform
 from weakref import WeakKeyDictionary
 
@@ -72,6 +72,8 @@ class _VariantMeta(type):
         type.__setattr__(cls, _BUILDING, True)
         slotted: type[Any] = dataclass(frozen=True, slots=True)(cls)
         type.__delattr__(slotted, _BUILDING)
+        type.__setattr__(slotted, "__setattr__", _refuse_write)
+        type.__setattr__(slotted, "__delattr__", _refuse_write)
         # Construction is refused until the namespace is sealed. Seal puts
         # the dataclass __init__ back, so a sealed variant costs nothing
         # extra to construct. (Guarding __new__ instead would not work:
@@ -127,6 +129,20 @@ def _check_declaration(
             f"{name} declares __slots__: a variant's slots are exactly its "
             "fields, which superenums declares for it"
         )
+
+
+def _refuse_write(self: object, name: str, *value: object) -> NoReturn:
+    """Every variant value is frozen: no attribute can be set or deleted.
+
+    Replaces dataclass's frozen ``__setattr__``/``__delattr__``, which for a
+    slotted class raise a bare ``TypeError`` (not ``FrozenInstanceError``) on
+    a name that is not a field. ``typing``'s subscripted call
+    (``Trees.Leaf[int](1)``) sets ``__orig_class__`` on the new value and
+    tolerates only an ``AttributeError``.
+    """
+    raise FrozenInstanceError(
+        f"{type(self).__qualname__} is frozen: cannot assign to or delete {name!r}"
+    )
 
 
 def _refuse_unsealed(self: object, *args: object, **kwargs: object) -> NoReturn:
@@ -256,11 +272,17 @@ def _cache_unit(variant: type[Any]) -> None:
 
 
 def _alias_variants(alias: TypeAliasType) -> tuple[object, ...]:
-    """The members of a union alias (or the single type it names)."""
+    """The members of a union alias (or the single type it names).
+
+    A subscripted generic variant (``Trees.Leaf[T]``, ``Trees.Leaf[int]``)
+    counts as its variant class: type arguments are the checker's to verify.
+    """
     value: object = alias.__value__
     if typing.get_origin(value) in (types.UnionType, typing.Union):
-        return typing.get_args(value)
-    return (value,)
+        members = typing.get_args(value)
+    else:
+        members = (value,)
+    return tuple(typing.get_origin(m) or m for m in members)
 
 
 def _names(members: Iterable[object]) -> str:

@@ -12,6 +12,7 @@ dependencies = []
 # Serialization extensions: one module and one extra per library.
 [project.optional-dependencies]
 cattrs = ["cattrs>=24.1"]
+pydantic = ["pydantic>=2.11"]
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14"]
@@ -29,6 +30,7 @@ dev = [
     "cattrs==26.2.1",
     "mypy==2.4.0",
     "pre-commit==4.7.0",
+    "pydantic==2.14.1",
     "pyright==1.1.414",
     "pytest==9.1.1",
     "ruff==0.17.1",

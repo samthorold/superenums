@@ -21,7 +21,7 @@ Time is in whole minutes from opening. Run it with:
 import random
 from collections import deque
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from typing import assert_never
 
 from pyev import EventLoop
@@ -34,10 +34,12 @@ class BankEvents(Variants):
         customer: int
 
     class ServiceStarted(Variant):
+        _: KW_ONLY  # two ints: never positional
         customer: int
         teller: int
 
     class ServiceFinished(Variant):
+        _: KW_ONLY  # two ints: never positional
         customer: int
         teller: int
 

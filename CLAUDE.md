@@ -4,7 +4,9 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions (Option/Result, serialization). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, `seal` (verifies the alias, locks the namespace, enables construction), and the introspection functions `variants`, `alias`, `namespace_of`, `variant_name` (module-level, so variant names never shadow them; a namespace binding `seal` is rejected for the same reason), with the full tooling below.
+**The design changed after 0.1.0, and the code hasn't caught up yet.** `docs/system-design/` now describes the 0.2.0 design: an enum is its union alias, variants live at module level (the module is the namespace), and there is no `Variants` class and no `seal`. `src/`, `docs/guide.md`, `README.md`, the tests and `examples/` still implement 0.1.0's namespace design, and are being migrated in follow-up PRs. Serialization (extensions) is designed after that.
+
+0.1.0's code, in `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, `seal` (verifies the alias, locks the namespace, enables construction), and the introspection functions `variants`, `alias`, `namespace_of`, `variant_name` (module-level, so variant names never shadow them; a namespace binding `seal` is rejected for the same reason), with the full tooling below. The namespace-related traps below describe this code and go away with the migration.
 
 ## Commands
 
@@ -59,29 +61,30 @@ Keep durable project knowledge (decisions, constraints, traps) in this file or i
 The full design and its rationale are in `docs/system-design/README.md`, which is authoritative. In short:
 
 ```python
-class Shapes(Variants):  # namespace (plural)
-    class Circle(Variant):
-        radius: float  # variants: frozen, slotted dataclasses
-
-    class Empty(Variant): ...  # unit variant: Shapes.Empty() is a cached singleton
+# shapes.py: the module is the namespace, and holds the behaviour too
+class Circle(Variant):
+    radius: float  # variants: frozen, slotted dataclasses
 
 
-type Shape = Shapes.Circle | Shapes.Empty  # the enum (singular): annotate with this
-Shapes.seal(Shape)  # checks alias == variants, locks namespace
+class Empty(Variant): ...  # unit variant: Empty() is a cached singleton
+
+
+type Shape = Circle | Empty  # the alias IS the enum: the only list of variants
 
 
 def describe(s: Shape) -> str:  # behaviour = free functions with one match
     match s:
-        case Shapes.Circle(radius=r):
+        case Circle(radius=r):
             return f"circle {r}"
-        case Shapes.Empty():
+        case Empty():
             return "empty"
         case _:
             assert_never(s)
 ```
 
 - Type-checker visibility beats syntax. No plugins; pyright, mypy, and ty must all understand it.
-- Python 3.12+, PEP 695 syntax. Generic enums put type parameters on variants, never on the namespace.
+- Python 3.12+, PEP 695 syntax. Generic enums put type parameters on the variants.
+- No inheritance between variants. Data shared by every variant goes in a wrapper (composition), not a base class.
 - Option/Result and serialization are extensions built on the public API, not the core.
 
 ## Known traps to watch

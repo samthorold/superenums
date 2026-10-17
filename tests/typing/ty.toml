@@ -1,0 +1,4 @@
+[analysis]
+respect-type-ignore-comments = false
+[rules]
+unused-ignore-comment = "error"

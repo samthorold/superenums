@@ -17,10 +17,20 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 - Pin GitHub Actions to exact versions. `astral-sh/setup-uv` doesn't publish floating major tags (`@v10` fails).
 - `actionlint-py` ships only a source package, and building it downloads the binary from GitHub. On macOS with python.org Python, that fails with `CERTIFICATE_VERIFY_FAILED` until `Install Certificates.command` has been run. A one-off workaround is `SSL_CERT_FILE=/etc/ssl/cert.pem uv sync`. uv caches the built wheel afterwards.
 
+## Versioning
+
+- Single source: `version` in `pyproject.toml`. Never hard-code it elsewhere. `superenums.__version__` uses `importlib.metadata`.
+- Releases happen on merge. `.github/workflows/release.yml` runs on every push to `main`: if `v<version>` isn't tagged yet, it builds, tags and publishes a GitHub Release. On PRs it's a dry run.
+- **Feature PRs never change the version.** A release is its own PR that only bumps the version (`task bump -- <part>`, which wraps `uv version --bump`) and releases whatever is on `main`. Never create or push `v*` tags by hand.
+- On PRs, the Release workflow fails if the PR changes the version to one that's already tagged. Otherwise that bump would be silently skipped after merge. Its logic is in `.github/scripts/release-check.sh`.
+- Hotfixes: fix forward. Merge the fix, then a patch-bump PR, which keeps `main` releasable. Release branches (`release/X.Y` from a tag, with the fix merged to `main` first and then cherry-picked with `git cherry-pick -x`) are the agreed fallback but aren't set up yet. They'd need the release workflow and ruleset extended to `release/**`, plus `--latest=false` and `--notes-start-tag` handling.
+- **Merging a PR that changes the version publishes a release, so ask before merging it.** The squash-merge permission below doesn't cover version bumps.
+- A tag created by the workflow's `GITHUB_TOKEN` doesn't trigger other workflows, so release work belongs in `release.yml` itself.
+
 ## Workflow
 
 - Changes go through a branch and a PR, never straight to `main`.
-- **A PR whose CI checks all pass may be squash-merged without asking** (`gh pr merge <n> --squash --delete-branch`), then `git switch main` and `git pull`. Confirm CI is green (`gh pr checks <n> --watch`) first. Don't merge with failing or pending checks.
+- **A PR whose CI checks all pass may be squash-merged without asking** (except a version bump: see Versioning) (`gh pr merge <n> --squash --delete-branch`), then `git switch main` and `git pull`. Confirm CI is green (`gh pr checks <n> --watch`) first. Don't merge with failing or pending checks.
 - The `main` ruleset requires PRs to be up to date. If a PR falls behind after another merge, run `gh pr update-branch <n>` and wait for CI again.
 
 ## Tooling

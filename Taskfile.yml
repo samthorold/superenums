@@ -1,0 +1,40 @@
+# https://taskfile.dev
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  check:
+    desc: Run everything (tests, type-level suite, strict checkers, lint)
+    cmds:
+      - uv run scripts/check.py
+
+  test:
+    desc: Run the runtime tests (including the doc examples)
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
+
+  typing:
+    desc: Run the type-level suite (including type-checking the doc examples)
+    cmds:
+      - uv run python tests/typing/run.py
+
+  lint:
+    desc: Lint and check formatting
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  fmt:
+    desc: Apply lint fixes and format
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  hooks:
+    desc: Run every pre-commit hook on all files (what CI runs)
+    cmds:
+      - uv run pre-commit run --all-files

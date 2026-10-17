@@ -1,22 +1,49 @@
-# Hooks run the tools pinned in uv.lock (via `uv run`), so pre-commit, CI and
-# local runs always use the same versions. Install once with:
+# Install once with:
 #   uv run pre-commit install
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: debug-statements
+      - id: check-added-large-files
+
+  # Tools run through `uv run` so they use the versions pinned in uv.lock, and
+  # work without an activated venv. `--locked` fails if uv.lock is stale.
   - repo: local
     hooks:
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run --locked ruff format
         language: system
         types_or: [python, pyi, markdown]
+
       - id: ruff-check
         name: ruff check --fix
-        entry: uv run ruff check --fix
+        entry: uv run --locked ruff check --fix
         language: system
         types_or: [python, pyi]
+
+      # actionlint also runs shellcheck on `run:` steps, since both are in the venv.
+      - id: actionlint
+        name: actionlint
+        entry: uv run --locked actionlint
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+
+      - id: shellcheck
+        name: shellcheck
+        entry: uv run --locked shellcheck
+        language: system
+        types: [shell]
+
       - id: check
         name: full check (tests, type-level suite, strict checkers, lint)
-        entry: uv run scripts/check.py
+        entry: uv run --locked scripts/check.py
         language: system
         pass_filenames: false
         always_run: true

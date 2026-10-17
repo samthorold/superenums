@@ -10,13 +10,18 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 
 - **Run everything** (before every commit): `uv run scripts/check.py` — pytest (including running the doc examples), the type-level suite (including type-checking the doc examples), pyright + mypy strict on `src/`, `ruff check`, `ruff format --check`. Exits non-zero on any failure.
 - Inner loop: `uv run pytest -q`; type-level suite alone: `uv run python tests/typing/run.py`.
-- **pre-commit**: install once with `uv run pre-commit install`. Hooks (`.pre-commit-config.yaml`) run `ruff format`, `ruff check --fix`, then the full check, all through `uv run`, so they use the versions pinned in `uv.lock`.
-- **CI** (`.github/workflows/ci.yml`): runs the full check on every push to `main` and on every PR, on Python 3.12, 3.13 and 3.14.
+- Common commands are also in `Taskfile.yml` (`task check`, `task test`, `task hooks`, ...). If `task` isn't installed, run it with `uvx --from go-task-bin task <name>`.
+- **pre-commit**: install once with `uv run pre-commit install`. Hooks (`.pre-commit-config.yaml`) run the file-hygiene checks (pre-commit-hooks), `ruff format`, `ruff check --fix`, actionlint (which also runs shellcheck on workflow `run:` steps), shellcheck on shell scripts, then the full check. The local hooks call `uv run --locked`, so they use the versions pinned in `uv.lock`; after changing dependencies, run `uv lock` or the hooks fail. `uv run pre-commit run --all-files` runs exactly what CI runs.
+- **CI** (`.github/workflows/ci.yml`): runs every pre-commit hook on all files for every PR, on Python 3.12, 3.13 and 3.14 (`UV_PYTHON` picks the matrix Python for every `uv` command, including the hooks'). On `main` it runs only when `uv.lock` changes, to refresh the uv cache that PRs restore from.
+- **The `main` ruleset** blocks deletion and force-pushes, requires a PR (squash merge only), and requires the status checks `pre-commit (3.12)`, `pre-commit (3.13)` and `pre-commit (3.14)` with the branch up to date. Renaming the CI job or changing the matrix breaks merging until the ruleset is updated to the new names.
+- Pin GitHub Actions to exact versions. `astral-sh/setup-uv` doesn't publish floating major tags (`@v10` fails).
+- `actionlint-py` ships only a source package, and building it downloads the binary from GitHub. On macOS with python.org Python, that fails with `CERTIFICATE_VERIFY_FAILED` until `Install Certificates.command` has been run. A one-off workaround is `SSL_CERT_FILE=/etc/ssl/cert.pem uv sync`. uv caches the built wheel afterwards.
 
 ## Workflow
 
 - Changes go through a branch and a PR, never straight to `main`.
-- **A PR whose CI checks all pass may be squash-merged without asking** (`gh pr merge <n> --squash --delete-branch`), then `git switch main` and `git pull`. Don't merge with failing or pending checks.
+- **A PR whose CI checks all pass may be squash-merged without asking** (`gh pr merge <n> --squash --delete-branch`), then `git switch main` and `git pull`. Confirm CI is green (`gh pr checks <n> --watch`) first. Don't merge with failing or pending checks.
+- The `main` ruleset requires PRs to be up to date. If a PR falls behind after another merge, run `gh pr update-branch <n>` and wait for CI again.
 
 ## Tooling
 

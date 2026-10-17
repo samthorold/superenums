@@ -124,3 +124,24 @@ def test_a_variant_applying_dataclass_itself_is_rejected(
     message = str(excinfo.value)
     assert "Cat" in message
     assert "@dataclass" in message
+
+
+def test_a_namespace_binding_the_name_seal_is_rejected() -> None:
+    # It would shadow Variants.seal, so the namespace could never be sealed.
+    with pytest.raises(SuperEnumError) as excinfo:
+
+        class Stamps(Variants):
+            class seal(Variant): ...
+
+    message = str(excinfo.value)
+    assert "Stamps" in message
+    assert "'seal'" in message
+
+
+def test_a_variant_named_seal_with_a_capital_is_allowed() -> None:
+    class Stamps(Variants):
+        class Seal(Variant): ...
+
+    type Stamp = Stamps.Seal
+    Stamps.seal(Stamp)
+    assert Stamps.Seal() is Stamps.Seal()

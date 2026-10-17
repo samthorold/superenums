@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-Core design settled (see `docs/system-design/`). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, and `seal` (verifies the alias, locks the namespace, enables construction), with the full tooling below.
+Core design settled (see `docs/system-design/`). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, `seal` (verifies the alias, locks the namespace, enables construction), and the introspection functions `variants`, `alias`, `namespace_of`, `variant_name` (module-level, so variant names never shadow them; a namespace binding `seal` is rejected for the same reason), with the full tooling below.
 
 ## Commands
 

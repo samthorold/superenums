@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-Core design settled (see `docs/system-design/`). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, `seal` (verifies the alias, locks the namespace, enables construction), and the introspection functions `variants`, `alias`, `namespace_of`, `variant_name` (module-level, so variant names never shadow them; a namespace binding `seal` is rejected for the same reason), with the full tooling below.
+The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions (Option/Result, serialization). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, `seal` (verifies the alias, locks the namespace, enables construction), and the introspection functions `variants`, `alias`, `namespace_of`, `variant_name` (module-level, so variant names never shadow them; a namespace binding `seal` is rejected for the same reason), with the full tooling below.
 
 ## Commands
 
@@ -18,11 +18,12 @@ Core design settled (see `docs/system-design/`). In `src/superenums/_core.py`: `
 - **pyright, mypy, and ty**, all pinned as dev dependencies. They check the library itself (strict) and run the type-level test suite. ty is pre-1.0: its failures are advisory until it stabilises.
 - **pytest** for runtime behaviour.
 - **Type-level test suite** (typeshed-style, `tests/typing/cases/`): small `.py` files using `assert_type(...)` for expected narrowing, and ignore comments on lines that must error. Each checker honours only its own comment (mypy `# type: ignore[code]`, pyright `# pyright: ignore[rule]`, ty `# ty: ignore[rule]`), with unused-ignore detection on, so a missing error fails the build. Pyright's `reportUnreachable` is on in the suite, so a complete match's `assert_never` arm carries `# pyright: ignore[reportUnreachable]` as pyright's proof of exhaustiveness. Scheme documented in `tests/typing/run.py`. This suite is how the core promise (checker-proven exhaustiveness) is tested.
-- **README examples** (```` ```python ```` blocks) are executed by `tests/test_readme.py`; keep each block self-contained.
+- **Doc examples**: every ```` ```python ```` block in `README.md` and `docs/guide.md` (including ones inside a `>` callout) is executed by `tests/test_docs.py`, each as a fresh module registered in `sys.modules` (dataclass resolves quoted annotations through it), so keep each block self-contained. The same test requires every `match` in them to end in `case _: assert_never(subject)`. The guide is ruff-formatted like code; `docs/system-design/` and this file are excluded to keep their compact examples. The guide claims its examples type-check in all three checkers (strict), except the deliberate parentheses-trap example; re-check that by hand when editing examples.
 - Later / lower priority: Hypothesis (property tests), pre-commit or prek, a GitHub Actions matrix (Python 3.12–3.14 × three checkers).
 
 ## Docs
 
+- `docs/guide.md` — the user guide: how to use superenums, with the user-facing traps. Every example is executed by the tests.
 - `docs/system-design/` — the design and the reasons for it. The source of truth for settled decisions.
 - `docs/prior-art.md` — survey of existing Python ADT and Option/Result libraries, the stalled `@sealed` PEP, and type-checker exhaustiveness support. Read it before making design decisions.
 
@@ -62,7 +63,7 @@ def describe(s: Shape) -> str:               # behaviour = free functions with o
 - **`dataclass(slots=True)` returns a new class.** Variants are made slotted dataclasses in a metaclass (`_VariantMeta.__new__`), before the class is bound in the namespace body, so each variant is one class object. Doing it in `__init_subclass__` would leave the namespace body, the collected variants, and `seal` holding the unslotted original. dataclass rebuilds the slotted class through the same metaclass; the rebuild is recognised by a private marker attribute (`_BUILDING`) that superenums sets before calling `dataclass` and removes after, never by `__slots__` presence (a user's own `__slots__` is rejected). The same marker lets `_VariantMeta.__setattr__` tell superenums' own `dataclass` call from a user's `@dataclass` over a finished variant, which it refuses when `dataclass` first sets `__dataclass_params__`.
 - **The unsealed-construction guard is a stand-in `__init__`**, swapped back to the dataclass `__init__` by `seal`, so sealed construction has no overhead. Don't guard via `__new__`: deleting a `__new__` from a class leaves CPython's `slot_tp_new` in place, and `object.__new__` then rejects constructor arguments.
 - **Unit variants are cached by `seal`**, which gives each variant with no fields a `__new__` returning its one instance and a `__reduce__` that rebuilds by calling the class. `__new__` alone is not enough: pickle protocols 0 and 1 rebuild through `copyreg._reconstructor`, which calls `object.__new__` directly and would make a second instance.
-- **Annotating with the namespace class** (`s: Shapes` instead of the union alias `s: Shape`) silently defeats exhaustiveness. It is currently only discouraged. Watch how often it bites during development, and consider stronger prevention (see `docs/system-design/README.md`).
+- **Annotating with the namespace class** (`s: Shapes` instead of the union alias `s: Shape`) silently defeats exhaustiveness. It is currently only discouraged (a callout in the guide; pinned per checker in `tests/typing/cases/namespace_annotation.py`). Watch how often it bites during development, and consider stronger prevention (see `docs/system-design/README.md`).
 - **Unit variant pattern without parentheses** (`case Shapes.Empty:` instead of `case Shapes.Empty():`) never matches. Checkers catch it as a non-exhaustive match; unchecked code fails silently.
 
 ## Open questions

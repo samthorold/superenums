@@ -72,11 +72,15 @@ Shapes.seal(Shape)
 circle = Shapes.Circle(radius=1.0)
 assert dataclasses.replace(circle, radius=2.0) == Shapes.Circle(radius=2.0)
 # different variants never compare equal, even with identical fields
-assert Shapes.Circle(1.0) != Shapes.Square(1.0)
+assert len({Shapes.Circle(1.0), Shapes.Square(1.0)}) == 2
 assert repr(circle) == "Shapes.Circle(radius=1.0)"
 ```
 
 End every `match` over an enum with `case _: assert_never(s)`. If a variant is missing, pyright, mypy, and ty each report an error on that line, whatever the function returns. At runtime, a value that gets through anyway raises an `AssertionError`.
+
+## Learn more
+
+The [guide](docs/guide.md) covers the rest: generic and recursive enums, unit variants, the traps to avoid, when to use a stdlib enum instead, introspection, and type-checker setup.
 
 ## Development
 

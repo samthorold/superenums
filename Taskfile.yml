@@ -38,3 +38,17 @@ tasks:
     desc: Run every pre-commit hook on all files (what CI runs)
     cmds:
       - uv run pre-commit run --all-files
+
+  version:
+    desc: Print the current package version
+    cmds:
+      - uv version --short
+    silent: true
+
+  bump:
+    desc: "Bump the version: task bump -- patch|minor|major"
+    preconditions:
+      - sh: test -n "{{.CLI_ARGS}}"
+        msg: "Usage: task bump -- patch|minor|major"
+    cmds:
+      - uv version --bump {{.CLI_ARGS}}

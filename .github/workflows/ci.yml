@@ -1,8 +1,12 @@
 name: CI
 
 on:
+  # PRs must be up to date and pass before merging, so re-running on main adds
+  # nothing, except when uv.lock changes: PRs can only restore caches saved on
+  # main, so this keeps the uv cache warm for them.
   push:
     branches: [main]
+    paths: [uv.lock]
   pull_request:
 
 permissions:
@@ -13,18 +17,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: check (Python ${{ matrix.python-version }})
+  # The job names ("pre-commit (3.12)" etc.) are required status checks in the
+  # main ruleset: renaming the job or changing the matrix needs the ruleset
+  # updated too.
+  pre-commit:
+    name: pre-commit (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
+    env:
+      # Every `uv` command, including the ones the hooks run, uses this Python.
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
-      # Runs everything: pytest (incl. doc examples), the type-level suite
-      # under pyright, mypy and ty, strict checks on src/, ruff lint and format.
-      - run: uv run --locked --python ${{ matrix.python-version }} scripts/check.py
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # Same hooks as local commits: file hygiene, ruff, actionlint, shellcheck,
+      # and the full check (pytest incl. doc examples, the type-level suite
+      # under pyright, mypy and ty, strict checks on src/).
+      - name: Run pre-commit
+        run: uv run --locked pre-commit run --all-files --show-diff-on-failure

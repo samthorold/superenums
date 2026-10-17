@@ -84,4 +84,15 @@ The [guide](docs/guide.md) covers the rest: generic and recursive enums, unit va
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for the tooling and the command that runs every check.
+Tooling is managed with [uv](https://docs.astral.sh/uv/). Common commands are in `Taskfile.yml`, run with [Task](https://taskfile.dev) (`brew install go-task`):
+
+```sh
+uv sync                     # create .venv with dev tools
+uv run pre-commit install   # install git hooks
+task                        # list tasks
+task check                  # run every check (also: uv run scripts/check.py)
+task test                   # uv run pytest (extra args: task test -- -k name)
+task hooks                  # every pre-commit hook on all files, as CI runs them
+```
+
+See [CLAUDE.md](CLAUDE.md) for what the checks cover.

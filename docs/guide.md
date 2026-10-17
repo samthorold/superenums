@@ -96,6 +96,42 @@ else:
 
 Name the namespace in the plural and the enum in the singular: `Shapes` holds the variants, and a `Shape` is one value. The pair reads naturally in code: you build a value with `Shapes.Circle(radius=1.0)` and accept one with `s: Shape`.
 
+If a long namespace name crowds the code that builds and matches values, bind a short name to it. pyright, mypy and ty treat the short name as the namespace, so matches through it are still proven exhaustive:
+
+```python
+from typing import assert_never
+
+from superenums import Variant, Variants
+
+
+class BankEvents(Variants):
+    class CustomerArrived(Variant):
+        customer: int
+
+    class DoorsClosed(Variant): ...
+
+
+type BankEvent = BankEvents.CustomerArrived | BankEvents.DoorsClosed
+BankEvents.seal(BankEvent)
+
+E = BankEvents
+
+
+def describe(event: BankEvent) -> str:
+    match event:
+        case E.CustomerArrived(customer=c):
+            return f"customer {c} arrives"
+        case E.DoorsClosed():
+            return "doors close"
+        case _:
+            assert_never(event)
+
+
+assert describe(E.CustomerArrived(customer=1)) == "customer 1 arrives"
+```
+
+Annotate with the enum as usual (`event: BankEvent`). The short name is the namespace, so annotating with it falls into the same trap as annotating with `BankEvents` ([below](#the-standard-match-ends-in-case-_-assert_nevers)).
+
 ## Behaviour is a free function with one `match`
 
 Behaviour over an enum is an ordinary function that takes the enum and contains one `match`. It is the Python form of a Rust `impl` block whose method matches on `self`.
@@ -276,6 +312,8 @@ else:
 ```
 
 Fields can have defaults, as in any dataclass. Don't apply `@dataclass` yourself, declare `__slots__`, or pass dataclass options: every variant is the same kind of dataclass, and superenums rejects a declaration that tries to change that. Variants are not ordered (`<`), because an order across variants needs a policy most enums don't want.
+
+**Use keywords when fields share a type.** For a variant with fields `customer: int` and `teller: int`, `Events.ServiceStarted(teller, customer)` type-checks just as well as `Events.ServiceStarted(customer, teller)`. Write `Events.ServiceStarted(customer=c, teller=t)`, in patterns (`case Events.ServiceStarted(customer=c, teller=t):`) as well as in construction. Positional fields are safe when no two share a type, or when the order is obvious from the variant itself, as with `Shapes.Rect(w, h)`.
 
 ## Unit variants
 

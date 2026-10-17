@@ -87,6 +87,8 @@ Variants are **not ordered** by default. Ordering within a variant is natural, b
 
 Users don't apply `@dataclass` themselves, and a variant that does, or that tries to opt out of freezing, is rejected when the class is created. One rule for every variant keeps them uniform.
 
+**Keyword-only fields use the standard `dataclasses.KW_ONLY` marker**, not a superenums option. Fields of the same type given positionally can be swapped silently (`ServiceStarted(teller, customer)`), which the first real-world example (a py-ev simulation, `examples/bank_tellers.py`) showed is common in event data. `_: KW_ONLY` in a variant body makes the fields after it keyword-only in construction and in patterns, since they leave `__match_args__`. pyright, mypy and ty all understand it through `dataclass_transform`. It needs no superenums code, keeps the rule that a variant passes no class keywords, and allows a mixed variant (positional fields, then keyword-only ones). Two alternatives were rejected. A `kw_only=True` class keyword would be a second spelling of the marker, and only for whole variants. Keyword-only by default (`kw_only_default=True`) would remove positional construction and patterns where they read well, as in `Shapes.Rect(w, h)`.
+
 ## A unit variant is a class with one cached instance
 
 A unit variant is declared and used like any other variant: it is a class, its value comes from calling it, and it is matched with a class pattern.

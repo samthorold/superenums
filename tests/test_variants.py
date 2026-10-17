@@ -96,6 +96,37 @@ def test_a_variant_value_is_immutable() -> None:
     assert circle.radius == 1.0
 
 
+def test_kw_only_marks_the_fields_after_it_keyword_only() -> None:
+    class Events(Variants):
+        class Started(Variant):
+            _: dataclasses.KW_ONLY
+            customer: int
+            teller: int
+
+        class Mixed(Variant):
+            kind: str
+            _: dataclasses.KW_ONLY
+            customer: int
+
+    type Event = Events.Started | Events.Mixed
+    Events.seal(Event)
+
+    started = Events.Started(customer=1, teller=2)
+    assert [f.name for f in dataclasses.fields(started)] == ["customer", "teller"]
+    with pytest.raises(TypeError, match="positional"):
+        Events.Started(1, 2)  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
+    assert Events.Mixed("walk-in", customer=3).kind == "walk-in"
+
+    # Keyword-only fields leave __match_args__, so patterns name them too.
+    assert Events.Started.__match_args__ == ()
+    assert Events.Mixed.__match_args__ == ("kind",)
+    match started:
+        case Events.Started(customer=c, teller=t):
+            assert (c, t) == (1, 2)
+        case _:
+            raise AssertionError("keyword pattern did not match")
+
+
 def test_field_defaults_follow_dataclass_rules() -> None:
     class Pens(Variants):
         class Ink(Variant):

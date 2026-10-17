@@ -313,7 +313,57 @@ else:
 
 Fields can have defaults, as in any dataclass. Don't apply `@dataclass` yourself, declare `__slots__`, or pass dataclass options: every variant is the same kind of dataclass, and superenums rejects a declaration that tries to change that. Variants are not ordered (`<`), because an order across variants needs a policy most enums don't want.
 
-**Use keywords when fields share a type.** For a variant with fields `customer: int` and `teller: int`, `Events.ServiceStarted(teller, customer)` type-checks just as well as `Events.ServiceStarted(customer, teller)`. Write `Events.ServiceStarted(customer=c, teller=t)`, in patterns (`case Events.ServiceStarted(customer=c, teller=t):`) as well as in construction. Positional fields are safe when no two share a type, or when the order is obvious from the variant itself, as with `Shapes.Rect(w, h)`.
+### Keyword-only fields
+
+When two fields share a type, positional arguments are easy to swap without anyone noticing. For a variant with fields `customer: int` and `teller: int`, `Events.ServiceStarted(teller, customer)` type-checks just as well as `Events.ServiceStarted(customer, teller)`. Make such fields keyword-only with the standard `dataclasses.KW_ONLY` marker: every field after it must be given by name, both when constructing and in patterns.
+
+```python
+from dataclasses import KW_ONLY
+from typing import assert_never
+
+from superenums import Variant, Variants
+
+
+class Events(Variants):
+    class ServiceStarted(Variant):
+        _: KW_ONLY
+        customer: int
+        teller: int
+
+    class Note(Variant):
+        text: str  # positional, before the marker
+        _: KW_ONLY
+        customer: int
+
+
+type Event = Events.ServiceStarted | Events.Note
+Events.seal(Event)
+
+started = Events.ServiceStarted(customer=1, teller=2)
+note = Events.Note("asked about a loan", customer=1)
+
+
+def customer(event: Event) -> int:
+    match event:
+        case Events.ServiceStarted(customer=c):
+            return c
+        case Events.Note(_, customer=c):
+            return c
+        case _:
+            assert_never(event)
+
+
+assert customer(started) == customer(note) == 1
+
+try:
+    Events.ServiceStarted(1, 2)  # type: ignore  # checkers reject this too
+except TypeError:
+    pass
+else:
+    raise AssertionError("keyword-only fields were given positionally")
+```
+
+pyright, mypy and ty all report a positional argument or a positional sub-pattern for a keyword-only field. The marker is a dataclass feature, not an option to superenums: `_` is not a field, and `dataclasses.fields` doesn't list it. Use it whenever fields share a type. Positional fields are safe when no two share a type, or when the order is obvious from the variant itself, as with `Shapes.Rect(w, h)`.
 
 ## Unit variants
 

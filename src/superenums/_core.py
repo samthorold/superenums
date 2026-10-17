@@ -8,8 +8,15 @@ one starts from its alias.
 import types
 import typing
 from collections.abc import Iterable
-from dataclasses import FrozenInstanceError, dataclass, fields
-from typing import Any, NoReturn, TypeAliasType, dataclass_transform
+from dataclasses import Field, FrozenInstanceError, dataclass, fields
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    NoReturn,
+    TypeAliasType,
+    dataclass_transform,
+)
 
 
 class SuperEnumError(TypeError):
@@ -129,6 +136,11 @@ class Variant(metaclass=_VariantMeta):
     """Base class for a variant: one alternative of an enum."""
 
     __slots__ = ()
+
+    if TYPE_CHECKING:
+        # Every variant is a dataclass, so dataclasses.fields accepts any
+        # variant class, including the ones variants() returns.
+        __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
 
 
 def _is_unit(variant: type[Any]) -> bool:

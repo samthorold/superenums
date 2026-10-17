@@ -9,6 +9,10 @@ authors = [
 requires-python = ">=3.12"
 dependencies = []
 
+# Serialization extensions: one module and one extra per library.
+[project.optional-dependencies]
+cattrs = ["cattrs>=24.1"]
+
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14"]
 build-backend = "uv_build"
@@ -22,6 +26,7 @@ required-version = "==0.13.1"
 [dependency-groups]
 dev = [
     "actionlint-py==1.7.12.25",
+    "cattrs==26.2.1",
     "mypy==2.4.0",
     "pre-commit==4.7.0",
     "pyright==1.1.414",

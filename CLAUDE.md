@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization (designed in `docs/system-design/`: tag inside the object, extras, a pydantic hook on `Variant`; build order cattrs, pydantic, msgspec), then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
+The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization (designed in `docs/system-design/`: tag inside the object, extras, a pydantic hook on `Variant`; `superenums.cattrs` is done, pydantic next, then msgspec), then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
 
 ## Commands
 
@@ -98,6 +98,10 @@ def describe(s: Shape) -> str:  # behaviour = free functions with one match
 - **Annotating with a class instead of the alias** (a shared base class, or a plain class grouping the variants) silently defeats exhaustiveness. The guide steers away from both (one module per enum; shared data in a wrapper).
 - **Unit variant pattern without parentheses**: `case shapes.Empty:` (dotted) is a value pattern that never matches; checkers catch it as a non-exhaustive match, unchecked code fails silently. A bare `case Empty:` is a capture pattern, which Python rejects unless it is the last arm.
 - **mypy doesn't narrow a tuple of unions**, so `match (state, event):` is never exhaustive in mypy (pyright and ty prove it). Pinned in `tests/typing/cases/several_enums.py`; the guide shows nested matches.
+
+- **Recursive generic enums need Python 3.12.4+ wherever annotations are evaluated** (e.g. cattrs): before it, `typing.get_type_hints` can't see a class's PEP 695 type parameters, so `"Tree[T]"` raises `NameError`. The local python.org 3.12.2 hits it; the test skips there.
+- **Serialization extensions are optional dependencies.** Each lives in its own module (`superenums/cattrs.py`), needs its extra in `[project.optional-dependencies]` and a pinned dev dependency, and nothing else may import its library: `tests/test_optional_dependencies.py` imports the core with them blocked.
+- **`Variant` declares `__dataclass_fields__` for checkers only** (under `TYPE_CHECKING`), so `dataclasses.fields(cls)` type-checks for the classes `variants()` returns.
 
 ## Open questions
 

@@ -682,6 +682,59 @@ assert label(Eraser(8.0)) == "eraser, 8.0px"
 
 An enum made only of unit variants is still allowed, so removing the last variant with data doesn't force a rewrite. If an enum stays that way, consider switching it to a stdlib enum.
 
+## Serialization
+
+Serialization is an extension, with one module per library. Each writes a value as an object holding its fields plus a tag naming its variant, `{"type": "Circle", "radius": 1.0}` ([why](system-design/README.md#serialization-the-tag-goes-inside-the-object)). A unit variant is just its tag, `{"type": "Empty"}`, and loading it gives back its one value.
+
+### cattrs
+
+Install the extra (`pip install superenums[cattrs]`, or `uv add superenums[cattrs]`), then configure a converter once per enum:
+
+```python
+from dataclasses import dataclass
+
+import cattrs
+
+import superenums.cattrs
+from superenums import Variant
+
+
+class Circle(Variant):
+    radius: float
+
+
+class Empty(Variant): ...
+
+
+type Shape = Circle | Empty
+
+
+@dataclass(frozen=True)
+class Drawing:
+    name: str
+    shape: Shape
+
+
+converter = cattrs.Converter()
+superenums.cattrs.configure(Shape, converter)
+
+drawing = Drawing("dot", Circle(1.0))
+data = converter.unstructure(drawing)
+assert data == {"name": "dot", "shape": {"type": "Circle", "radius": 1.0}}
+assert converter.structure(data, Drawing) == drawing
+
+# On its own, an enum value needs its alias: cattrs can't tell from the value
+assert converter.unstructure(Empty(), Shape) == {"type": "Empty"}
+shape: Shape = converter.structure({"type": "Empty"}, Shape.__value__)
+assert shape is Empty()
+```
+
+- **Pass the alias when writing a value on its own.** `converter.unstructure(Empty())` sees only the class `Empty`, writes `{}`, and loses the tag. Fields annotated with the alias, as in `Drawing`, are tagged automatically.
+- **Load with `Shape.__value__`.** cattrs types `structure`'s target as a class, so checkers reject `converter.structure(data, Shape)` (it works at runtime). The alias's value, the union it names, is accepted, and annotating the result (`shape: Shape = ...`) gives it its type back.
+- **The tag key** is `"type"`. Change it with `configure(Shape, converter, key="kind")`. A variant with a field named like the key, or two variants with the same name (from different modules), is refused with `SuperEnumError` when configuring.
+- **Generic enums** are configured once (`configure(Tree, converter)`) and loaded through a specialisation (`converter.structure(data, Tree[int])`), whose type arguments reach the fields. A recursive generic enum needs Python 3.12.4 or later, where `typing.get_type_hints` first sees a class's type parameters.
+- Variants must unstructure to dicts, cattrs' default. A converter configured to write them as tuples is refused when writing.
+
 ## Introspection
 
 Two functions describe an enum at runtime. They are what extensions such as serializers build on.

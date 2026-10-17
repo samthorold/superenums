@@ -1,6 +1,6 @@
 [project]
 name = "superenums"
-version = "0.3.0"
+version = "0.4.0"
 description = "Rust-style enums for Python: variants that carry data, and type-checker-proven exhaustive matching."
 readme = "README.md"
 authors = [

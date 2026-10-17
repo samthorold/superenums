@@ -10,6 +10,8 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 
 - **Run everything** (before every commit): `uv run scripts/check.py` — pytest (including the README examples), the type-level suite, pyright + mypy strict on `src/`, `ruff check`, `ruff format --check`. Exits non-zero on any failure.
 - Inner loop: `uv run pytest -q`; type-level suite alone: `uv run python tests/typing/run.py`.
+- **pre-commit**: install once with `uv run pre-commit install`. Hooks (`.pre-commit-config.yaml`) run `ruff format`, `ruff check --fix`, then the full check, all through `uv run`, so they use the versions pinned in `uv.lock`.
+- **CI** (`.github/workflows/ci.yml`): runs the full check on every push to `main` and on every PR, on Python 3.12, 3.13 and 3.14.
 
 ## Tooling
 
@@ -19,7 +21,8 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 - **pytest** for runtime behaviour.
 - **Type-level test suite** (typeshed-style, `tests/typing/cases/`): small `.py` files using `assert_type(...)` for expected narrowing, and ignore comments on lines that must error. Each checker honours only its own comment (mypy `# type: ignore[code]`, pyright `# pyright: ignore[rule]`, ty `# ty: ignore[rule]`), with unused-ignore detection on, so a missing error fails the build. Pyright's `reportUnreachable` is on in the suite, so a complete match's `assert_never` arm carries `# pyright: ignore[reportUnreachable]` as pyright's proof of exhaustiveness. Scheme documented in `tests/typing/run.py`. This suite is how the core promise (checker-proven exhaustiveness) is tested.
 - **Doc examples**: every ```` ```python ```` block in `README.md` and `docs/guide.md` (including ones inside a `>` callout) is executed by `tests/test_docs.py`, each as a fresh module registered in `sys.modules` (dataclass resolves quoted annotations through it), so keep each block self-contained. The same test requires every `match` in them to end in `case _: assert_never(subject)`. The guide is ruff-formatted like code; `docs/system-design/` and this file are excluded to keep their compact examples. The guide claims its examples type-check in all three checkers (strict), except the deliberate parentheses-trap example; re-check that by hand when editing examples.
-- Later / lower priority: Hypothesis (property tests), pre-commit or prek, a GitHub Actions matrix (Python 3.12–3.14 × three checkers).
+- The type-level suite targets Python 3.12 in every checker (pyright, mypy and ty configs in `tests/typing/`), whichever interpreter runs it, so results are identical across the CI matrix.
+- Later / lower priority: Hypothesis (property tests).
 
 ## Docs
 
@@ -34,18 +37,25 @@ Keep durable project knowledge (decisions, constraints, traps) in this file or i
 The full design and its rationale are in `docs/system-design/README.md`, which is authoritative. In short:
 
 ```python
-class Shapes(Variants):                      # namespace (plural)
-    class Circle(Variant): radius: float     # variants: frozen, slotted dataclasses
-    class Empty(Variant): ...                # unit variant: Shapes.Empty() is a cached singleton
+class Shapes(Variants):  # namespace (plural)
+    class Circle(Variant):
+        radius: float  # variants: frozen, slotted dataclasses
 
-type Shape = Shapes.Circle | Shapes.Empty    # the enum (singular): annotate with this
-Shapes.seal(Shape)                           # checks alias == variants, locks namespace
+    class Empty(Variant): ...  # unit variant: Shapes.Empty() is a cached singleton
 
-def describe(s: Shape) -> str:               # behaviour = free functions with one match
+
+type Shape = Shapes.Circle | Shapes.Empty  # the enum (singular): annotate with this
+Shapes.seal(Shape)  # checks alias == variants, locks namespace
+
+
+def describe(s: Shape) -> str:  # behaviour = free functions with one match
     match s:
-        case Shapes.Circle(radius=r): return f"circle {r}"
-        case Shapes.Empty(): return "empty"
-        case _: assert_never(s)
+        case Shapes.Circle(radius=r):
+            return f"circle {r}"
+        case Shapes.Empty():
+            return "empty"
+        case _:
+            assert_never(s)
 ```
 
 - Type-checker visibility beats syntax. No plugins; pyright, mypy, and ty must all understand it.
@@ -57,7 +67,7 @@ def describe(s: Shape) -> str:               # behaviour = free functions with o
 - **pyright config lives in `pyrightconfig.json`, not `pyproject.toml`.** pyright prefers any `pyrightconfig.json` in a parent directory (e.g. one in `~`) over a `[tool.pyright]` section, which can make it scan the whole home directory and run out of memory.
 - **ty narrows variants to intersections** (`Rect & ~Circle`) in later `case` arms, because without `@final` a class could inherit from two variants. Exact `assert_type` on the subject fails in ty only; the suite records this with `# ty: ignore[assert-type-unspellable-subtype]`. Exhaustiveness is unaffected.
 
-- **ty and generic variants.** ty infers the literal type argument from construction (`Trees.Leaf(1)` is `Leaf[Literal[1]]`, not `Leaf[int]`), and narrows a class pattern on a generic variant to both the subject's specialisation and `Unknown` (`case Trees.Leaf(value=v)` gives `v: T | Unknown`). Exact `assert_type`s on these fail in ty only; the suite records them with `# ty: ignore[type-assertion-failure]` (`tests/typing/cases/generics.py`). Mismatched type arguments and exhaustiveness are unaffected.
+- **ty and generic variants.** when targeting Python 3.12, ty infers the literal type argument from construction (`Trees.Leaf(1)` is `Leaf[Literal[1]]`, not `Leaf[int]`; targeting 3.13+ it infers `Leaf[int]`), and narrows a class pattern on a generic variant to both the subject's specialisation and `Unknown` (`case Trees.Leaf(value=v)` gives `v: T | Unknown`). Exact `assert_type`s on these fail in ty only; the suite records them with `# ty: ignore[type-assertion-failure]` (`tests/typing/cases/generics.py`). Mismatched type arguments and exhaustiveness are unaffected.
 - **Frozen slotted dataclasses raise a bare `TypeError` for a non-field attribute write** (CPython 3.12: the generated `__setattr__` calls `super(cls, self)` with the pre-slots class). `typing`'s subscripted call (`Trees.Leaf[int](1)`) sets `__orig_class__` on the new value and tolerates only `AttributeError`, so `_VariantMeta` replaces each variant's `__setattr__`/`__delattr__` with one that always raises `FrozenInstanceError`.
 - **Seal compares variant classes, not type arguments.** `_alias_variants` unwraps each alias member with `typing.get_origin`, so `Trees.Leaf[T]` and `Trees.Leaf[int]` both count as `Trees.Leaf`. Nothing evaluates variant annotations at class creation, which is what lets recursive variants use quoted annotations naming a module-level alias defined after the namespace.
 - **`dataclass(slots=True)` returns a new class.** Variants are made slotted dataclasses in a metaclass (`_VariantMeta.__new__`), before the class is bound in the namespace body, so each variant is one class object. Doing it in `__init_subclass__` would leave the namespace body, the collected variants, and `seal` holding the unslotted original. dataclass rebuilds the slotted class through the same metaclass; the rebuild is recognised by a private marker attribute (`_BUILDING`) that superenums sets before calling `dataclass` and removes after, never by `__slots__` presence (a user's own `__slots__` is rejected). The same marker lets `_VariantMeta.__setattr__` tell superenums' own `dataclass` call from a user's `@dataclass` over a finished variant, which it refuses when `dataclass` first sets `__dataclass_params__`.

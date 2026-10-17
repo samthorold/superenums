@@ -1,0 +1,22 @@
+# Hooks run the tools pinned in uv.lock (via `uv run`), so pre-commit, CI and
+# local runs always use the same versions. Install once with:
+#   uv run pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi, markdown]
+      - id: ruff-check
+        name: ruff check --fix
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: check
+        name: full check (tests, type-level suite, strict checkers, lint)
+        entry: uv run scripts/check.py
+        language: system
+        pass_filenames: false
+        always_run: true

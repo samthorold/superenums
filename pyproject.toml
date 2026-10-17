@@ -16,6 +16,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "mypy==2.4.0",
+    "pre-commit==4.7.0",
     "pyright==1.1.414",
     "pytest==9.1.1",
     "ruff==0.17.1",
@@ -27,6 +28,8 @@ target-version = "py312"
 # The design docs keep their compact one-line examples. The user guide
 # (docs/guide.md) is formatted like code, since its examples are run as tests.
 extend-exclude = ["docs/system-design", "docs/prior-art.md", "CLAUDE.md"]
+# Keep those exclusions when files are passed explicitly (as pre-commit does).
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]

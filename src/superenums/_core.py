@@ -31,6 +31,9 @@ class SuperEnumError(TypeError):
 # class dataclass(slots=True) rebuilds from it.
 _BUILDING = "__superenums_building__"
 
+# Where a variant's pydantic config is kept when set after the class is made.
+_PYDANTIC_CONFIG = "_superenums_pydantic_config"
+
 
 class _VariantMeta(type):
     """Makes each variant class a frozen, slotted dataclass as it is created.
@@ -68,6 +71,32 @@ class _VariantMeta(type):
         if _is_unit(slotted):
             _cache_unit(slotted)
         return typing.cast(_VariantMeta, slotted)
+
+    @property
+    def __pydantic_config__(cls) -> Any:
+        """The variant's pydantic config, if it has one (``ConfigDict``).
+
+        pydantic reads this before it builds a variant's schema, including a
+        generic variant's (``Leaf[int]``), so it is where pydantic support is
+        installed: lazily, so the core never imports pydantic itself.
+        """
+        # Imported here, never at module level: only pydantic reads this, so
+        # pydantic is installed. Variant itself is not a variant.
+        if Variant in cls.__bases__:
+            from superenums import pydantic as _pydantic
+
+            _pydantic.prepare(typing.cast("type[Variant]", cls))
+        namespace = vars(cls)
+        for name in ("__pydantic_config__", _PYDANTIC_CONFIG):
+            if name in namespace:
+                return namespace[name]
+        # As if the attribute were absent, which is what pydantic expects.
+        raise AttributeError("__pydantic_config__")
+
+    @__pydantic_config__.setter
+    def __pydantic_config__(cls, config: Any) -> None:
+        # pydantic.with_config sets it on a finished variant.
+        type.__setattr__(cls, _PYDANTIC_CONFIG, config)
 
     def __setattr__(cls, name: str, value: Any) -> None:
         # dataclass records its options on a class before anything else, so

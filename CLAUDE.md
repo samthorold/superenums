@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization (designed in `docs/system-design/`: tag inside the object, extras, a pydantic hook on `Variant`; `superenums.cattrs` is done, pydantic next, then msgspec), then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
+The core is complete (design in `docs/system-design/`, user guide in `docs/guide.md`). Next come the extensions: serialization (designed in `docs/system-design/`: tag inside the object, extras, a pydantic hook on `Variant`; `superenums.cattrs` and `superenums.pydantic` are done, msgspec next), then Option/Result. An enum is its union alias (`type Shape = Circle | Rect`), and variants are module-level `Variant` subclasses: the module is the namespace. 0.1.0's `Variants` namespace class and `seal` are gone (the design doc records why). In `src/superenums/_core.py`: `Variant`, `SuperEnumError`, and the introspection functions `variants(alias)` and `variant_name`, with the full tooling below.
 
 ## Commands
 
@@ -101,6 +101,8 @@ def describe(s: Shape) -> str:  # behaviour = free functions with one match
 
 - **Recursive generic enums need Python 3.12.4+ wherever annotations are evaluated** (e.g. cattrs): before it, `typing.get_type_hints` can't see a class's PEP 695 type parameters, so `"Tree[T]"` raises `NameError`. The local python.org 3.12.2 hits it, and so would the runner's system 3.12.3; the test skips there, and CI uses uv's managed Python to run it.
 - **Serialization extensions are optional dependencies.** Each lives in its own module (`superenums/cattrs.py`), needs its extra in `[project.optional-dependencies]` and a pinned dev dependency, and nothing else may import its library: `tests/test_optional_dependencies.py` imports the core with them blocked.
+- **pydantic support is installed lazily by `_VariantMeta.__pydantic_config__`**, a property pydantic reads from every dataclass (generic ones included) before collecting its decorators. It installs the tag decorators on `Variant` (`superenums.pydantic.prepare`), returns the variant's own config, and raises `AttributeError` when there is none (pydantic < 2.14 needs that). `__get_pydantic_core_schema__` was rejected: pydantic never calls it for `Leaf[int]`. Each pydantic test that depends on the install happening on first contact runs in a subprocess, since any earlier test installs it.
+- **Testing an extension against other library versions:** `uv run --isolated --with <lib>==<v> --with-editable . pytest ...`. With `--with .` uv reuses its cached build of the same superenums version, so the tests run against stale source.
 - **`Variant` declares `__dataclass_fields__` for checkers only** (under `TYPE_CHECKING`), so `dataclasses.fields(cls)` type-checks for the classes `variants()` returns.
 
 ## Open questions

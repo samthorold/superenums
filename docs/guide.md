@@ -735,6 +735,49 @@ assert shape is Empty()
 - **Generic enums** are configured once (`configure(Tree, converter)`) and loaded through a specialisation (`converter.structure(data, Tree[int])`), whose type arguments reach the fields. A recursive generic enum needs Python 3.12.4 or later, where `typing.get_type_hints` first sees a class's type parameters.
 - Variants must unstructure to dicts, cattrs' default. A converter configured to write them as tuples is refused when writing.
 
+### pydantic
+
+Install the extra (`pip install superenums[pydantic]`). There is nothing to import or configure: annotate with the alias, as anywhere else.
+
+```python
+from pydantic import BaseModel, TypeAdapter
+
+from superenums import Variant
+
+
+class Circle(Variant):
+    radius: float
+
+
+class Empty(Variant): ...
+
+
+type Shape = Circle | Empty
+
+
+class Drawing(BaseModel):
+    name: str
+    shape: Shape
+
+
+drawing = Drawing(name="dot", shape=Circle(1.0))
+assert drawing.model_dump() == {
+    "name": "dot",
+    "shape": {"type": "Circle", "radius": 1.0},
+}
+assert Drawing.model_validate_json(drawing.model_dump_json()) == drawing
+
+shapes = TypeAdapter(Shape)
+assert shapes.dump_python(Empty()) == {"type": "Empty"}
+assert shapes.validate_json('{"type": "Empty"}') is Empty()
+```
+
+- **The tag key is always `"type"`.** A variant with a field named `type` is refused with `SuperEnumError` when pydantic first builds a schema for it.
+- **A variant used on its own is tagged too** (a field annotated `Circle`), and so are generic enums (`TypeAdapter(Tree[int])`). The JSON Schema requires the tag, as a `const`.
+- **A variant in an untyped field (`Any`, `dict[str, Any]`) is written as a plain dataclass, without its tag**: pydantic only knows to tag it from the annotation.
+- pydantic config on a variant (`pydantic.with_config`, or `__pydantic_config__` in the class body) is honoured.
+- Validation errors list every variant, since pydantic tries each one in turn.
+
 ## Introspection
 
 Two functions describe an enum at runtime. They are what extensions such as serializers build on.

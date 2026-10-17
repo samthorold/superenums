@@ -21,6 +21,7 @@ class Circle(superenums.Variant):
 
 type Shape = Circle
 assert superenums.variants(Shape) == (Circle,)
+assert Circle(1.0).radius == 1.0
 """
 
 

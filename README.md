@@ -66,6 +66,9 @@ class Shapes(Variants):
         side: float
 
 
+type Shape = Shapes.Circle | Shapes.Square
+Shapes.seal(Shape)
+
 circle = Shapes.Circle(radius=1.0)
 assert dataclasses.replace(circle, radius=2.0) == Shapes.Circle(radius=2.0)
 # different variants never compare equal, even with identical fields

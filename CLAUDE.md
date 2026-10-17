@@ -4,7 +4,7 @@ Rust-style enums (sum types / algebraic data types) for Python: variants that ca
 
 ## Status
 
-Core design settled (see `docs/system-design/`). Tracer bullet in place: `Variant`, `Variants`, `seal` (happy path) in `src/superenums/_core.py`, with the full tooling below.
+Core design settled (see `docs/system-design/`). In `src/superenums/_core.py`: `Variant`, `Variants`, `SuperEnumError`, and `seal` (verifies the alias, locks the namespace, enables construction), with the full tooling below.
 
 ## Commands
 
@@ -57,6 +57,7 @@ def describe(s: Shape) -> str:               # behaviour = free functions with o
 - **ty narrows variants to intersections** (`Rect & ~Circle`) in later `case` arms, because without `@final` a class could inherit from two variants. Exact `assert_type` on the subject fails in ty only; the suite records this with `# ty: ignore[assert-type-unspellable-subtype]`. Exhaustiveness is unaffected.
 
 - **`dataclass(slots=True)` returns a new class.** Variants are made slotted dataclasses in a metaclass (`_VariantMeta.__new__`), before the class is bound in the namespace body, so each variant is one class object. Doing it in `__init_subclass__` would leave the namespace body, the collected variants, and `seal` holding the unslotted original.
+- **The unsealed-construction guard is a stand-in `__init__`**, swapped back to the dataclass `__init__` by `seal`, so sealed construction has no overhead. Don't guard via `__new__`: deleting a `__new__` from a class leaves CPython's `slot_tp_new` in place, and `object.__new__` then rejects constructor arguments.
 - **Annotating with the namespace class** (`s: Shapes` instead of the union alias `s: Shape`) silently defeats exhaustiveness. It is currently only discouraged. Watch how often it bites during development, and consider stronger prevention (see `docs/system-design/README.md`).
 - **Unit variant pattern without parentheses** (`case Shapes.Empty:` instead of `case Shapes.Empty():`) never matches. Checkers catch it as a non-exhaustive match; unchecked code fails silently.
 

@@ -81,10 +81,10 @@ def test_a_slotted_variant_is_the_class_the_namespace_body_bound() -> None:
         bound_in_body = Cat
 
     type Pet = Pets.Cat
+    Pets.seal(Pet)
     assert Pets.bound_in_body is Pets.Cat
     assert Pet.__value__ is Pets.Cat
     assert type(Pets.Cat("Tom")) is Pets.Cat
-    Pets.seal(Pet)
 
 
 def test_a_variant_value_is_immutable() -> None:
@@ -101,6 +101,8 @@ def test_field_defaults_follow_dataclass_rules() -> None:
             width: float = 0.5
             tags: list[str] = dataclasses.field(default_factory=list[str])
 
+    type Pen = Pens.Ink
+    Pens.seal(Pen)
     ink = Pens.Ink("blue")
     assert (ink.width, ink.tags) == (0.5, [])
     assert Pens.Ink("red", 1.0).width == 1.0
@@ -122,6 +124,8 @@ def test_values_compare_and_hash_by_variant_and_field_values() -> None:
         class Down(Variant):
             steps: int
 
+    type Move = Moves.Up | Moves.Down
+    Moves.seal(Move)
     assert Moves.Up(1) == Moves.Up(1)
     assert hash(Moves.Up(1)) == hash(Moves.Up(1))
     assert Moves.Up(1) != Moves.Up(2)

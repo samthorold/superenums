@@ -13,6 +13,11 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 - **pre-commit**: install once with `uv run pre-commit install`. Hooks (`.pre-commit-config.yaml`) run `ruff format`, `ruff check --fix`, then the full check, all through `uv run`, so they use the versions pinned in `uv.lock`.
 - **CI** (`.github/workflows/ci.yml`): runs the full check on every push to `main` and on every PR, on Python 3.12, 3.13 and 3.14.
 
+## Workflow
+
+- Changes go through a branch and a PR, never straight to `main`.
+- **A PR whose CI checks all pass may be squash-merged without asking** (`gh pr merge <n> --squash --delete-branch`), then `git switch main` and `git pull`. Don't merge with failing or pending checks.
+
 ## Tooling
 
 - Use **uv** for everything: environments, dependencies, running tools (`uv run ...`, `uv add --dev ...`). Don't use bare `pip` or globally installed tools.

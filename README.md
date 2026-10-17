@@ -50,6 +50,29 @@ An enum has two names. `Shapes` is the **namespace** that holds the variants, so
 
 Variants are dataclasses: build them positionally or by keyword, and match them with positional or keyword class patterns, in field order. Unit variants still need parentheses, both to construct (`Shapes.Empty()`) and to match (`case Shapes.Empty():`).
 
+Variant values are immutable and compare by variant and field values, so they work in sets and as dict keys. A changed value is a new value:
+
+```python
+import dataclasses
+
+from superenums import Variant, Variants
+
+
+class Shapes(Variants):
+    class Circle(Variant):
+        radius: float
+
+    class Square(Variant):
+        side: float
+
+
+circle = Shapes.Circle(radius=1.0)
+assert dataclasses.replace(circle, radius=2.0) == Shapes.Circle(radius=2.0)
+# different variants never compare equal, even with identical fields
+assert Shapes.Circle(1.0) != Shapes.Square(1.0)
+assert repr(circle) == "Shapes.Circle(radius=1.0)"
+```
+
 End every `match` over an enum with `case _: assert_never(s)`. If a variant is missing, pyright, mypy, and ty each report an error on that line, whatever the function returns. At runtime, a value that gets through anyway raises an `AssertionError`.
 
 ## Development

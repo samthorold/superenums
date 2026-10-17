@@ -49,6 +49,7 @@ The core is complete (design in `docs/system-design/`, user guide in `docs/guide
 
 - `docs/guide.md` — the user guide: how to use superenums, with the user-facing traps. Every example is executed by the tests.
 - `docs/system-design/` — the design and the reasons for it. The source of truth for settled decisions.
+- `examples/` — real-world uses that test the design in anger (`examples/README.md` records what each showed). `bank_tellers.py` is a py-ev queueing simulation: a PEP 723 script pinning py-ev by tag, Python 3.13+, so it's outside `scripts/check.py` and CI. Run with `task example`, type-check with `task example-check`. Editor pyright can't resolve `pyev` there (it's only in the script's uv environment); `task example-check` points the checkers at it.
 - `docs/prior-art.md` — survey of existing Python ADT and Option/Result libraries, the stalled `@sealed` PEP, and type-checker exhaustiveness support. Read it before making design decisions.
 
 Keep durable project knowledge (decisions, constraints, traps) in this file or in `docs/`, not in private agent memory.

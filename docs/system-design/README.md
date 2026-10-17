@@ -244,6 +244,37 @@ Introspection is public because extensions use only the public API, and any exte
 
 Serialization is an extension, not part of the core. Pydantic, msgspec, and cattrs each already have their own tagged-union mechanism. An extension maps an enum onto each one, given its alias, using the variant name as the default tag. Because a variant can come from any module, two variants in one alias can share a name; an extension checks that its tags are unique when it is configured for an alias. Putting serialization in the core would mean choosing among those libraries and depending on them.
 
+## Serialization: the tag goes inside the object
+
+Every serialization extension writes a value the same way: an object holding the variant's fields plus a **tag** naming the variant.
+
+```python
+{"type": "Circle", "radius": 1.0}
+{"type": "Empty"}  # a unit variant is just its tag
+```
+
+The tag key defaults to `"type"` and can be changed per alias. The tag value is `variant_name`. This is serde's internally tagged form (`#[serde(tag = "type")]`), and it is the native tagged-union form of pydantic (a discriminator field), msgspec (`tag_field`) and cattrs (`configure_tagged_union`), so each extension maps onto its library's own mechanism. It is also how JSON APIs commonly tag their objects. Loading a unit variant returns its cached instance.
+
+A variant with a field of the same name as the tag key is an error when the extension is configured, since its tag would overwrite the field.
+
+Rejected: serde's default externally tagged form, `{"Circle": {"radius": 1.0}}`. It cannot collide with a field, but none of the three libraries supports it natively, so every extension would carry its own codec.
+
+### Packaging: extras, not separate distributions
+
+The extensions ship in the `superenums` distribution as modules (`superenums.cattrs`, `superenums.pydantic`, `superenums.msgspec`), each needing its library through an extra (`superenums[pydantic]`). The core keeps zero dependencies: nothing outside an extension's own module imports its library, and a test checks that `superenums` imports with none of them installed.
+
+### pydantic: a plain alias just works
+
+Given a union of plain dataclasses, pydantic writes no tag. Two unit variants both become `{}`, and same-shaped variants load as whichever comes first, without any error. A marker the user has to remember (`Annotated[Shape, ...]`) would leave every forgotten one losing data silently. So `Variant` defines `__get_pydantic_core_schema__`, and a plain `Shape` in a model writes and reads the tag. The method imports pydantic only when pydantic calls it, so the core still doesn't depend on pydantic. This is the one place the core knows about a serialization library: it is justified by the silent data loss, and it still uses only the public introspection API.
+
+The hook sees one variant at a time, never the alias, so it can't do everything. It always uses the default `"type"` key. pydantic tries the variants in turn instead of dispatching on the tag, so validation errors list every variant. And it can't check tags are unique. `Annotated[Shape, superenums.pydantic.Tagged(key="kind")]` opts into a real discriminated union over the alias: a custom key, dispatch on the tag with errors for that variant only, and the uniqueness check.
+
+When dumping, pydantic picks a union member by trying each one's serializer. Each variant's serializer must refuse a value of another variant (raise `PydanticSerializationUnexpectedValue`), or the first variant's serializer accepts everything and writes the wrong tag.
+
+### msgspec: open
+
+msgspec can't load a union of dataclasses at all ("Type unions may not contain more than one dataclass or attrs type"). Two approaches remain to be prototyped: generating a matching tagged `msgspec.Struct` per variant (fast, and gives JSON Schema), or decoding to raw data, dispatching on the tag and calling `msgspec.convert`.
+
 ## Python 3.12 and later
 
 superenums requires Python 3.12+. Its API and documentation use PEP 695 syntax throughout (`class Some[T](Variant):`, `type Shape = ...`).
